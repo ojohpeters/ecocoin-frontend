@@ -121,7 +121,7 @@ const leafPositions = [
 ]
 
 // Visual components for each section
-const VisualComponent = ({ type, image }) => {
+const VisualComponent = ({ type, image="/images/eco-token.png" }) => {
   switch (type) {
     case "globe":
       return (
