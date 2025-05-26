@@ -21,11 +21,35 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
     // Check if Phantom wallet is installed
     const checkPhantom = () => {
       if (typeof window !== "undefined") {
-        setPhantomInstalled(!!window.solana?.isPhantom)
+        // Check for mobile Phantom app
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+
+        if (isMobile) {
+          // On mobile, check if we can detect Phantom through different methods
+          const hasPhantom = !!(
+            window.solana?.isPhantom ||
+            window.phantom?.solana?.isPhantom ||
+            // Check if we're in the Phantom in-app browser
+            navigator.userAgent.includes("Phantom")
+          )
+          setPhantomInstalled(hasPhantom)
+        } else {
+          // Desktop browser extension check
+          setPhantomInstalled(!!window.solana?.isPhantom)
+        }
       }
     }
 
     checkPhantom()
+
+    // Also check when the page becomes visible (helps with mobile app switching)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        setTimeout(checkPhantom, 500)
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
 
     // Only check for existing connection if user is on desktop or has explicitly interacted
     const checkExistingConnection = async () => {
@@ -58,24 +82,77 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
       }
     }
 
-    if (phantomInstalled && !hasCheckedConnection) {
+    if (!hasCheckedConnection) {
       // Add a small delay to ensure page is fully loaded
       setTimeout(checkExistingConnection, 1000)
     }
-  }, [onWalletConnected, referralInput, hasCheckedConnection, phantomInstalled])
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [onWalletConnected, referralInput, hasCheckedConnection])
 
   const connectWallet = async () => {
-    if (!phantomInstalled) {
-      setError("Phantom wallet is not installed. Please install it from https://phantom.app/")
-      return
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+
+    // Check for Phantom on mobile vs desktop
+    let phantomAvailable = false
+
+    if (isMobile) {
+      // On mobile, check multiple ways Phantom might be available
+      phantomAvailable = !!(
+        window.solana?.isPhantom ||
+        window.phantom?.solana?.isPhantom ||
+        navigator.userAgent.includes("Phantom")
+      )
+
+      // If not available, try to open Phantom app or redirect to app store
+      if (!phantomAvailable) {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        const isAndroid = /Android/.test(navigator.userAgent)
+
+        if (isIOS) {
+          // Try to open Phantom app, fallback to App Store
+          window.location.href =
+            "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.href) + "?ref=phantom"
+          setTimeout(() => {
+            window.open("https://apps.apple.com/app/phantom-solana-wallet/id1598432977", "_blank")
+          }, 2000)
+        } else if (isAndroid) {
+          // Try to open Phantom app, fallback to Play Store
+          window.location.href =
+            "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.href) + "?ref=phantom"
+          setTimeout(() => {
+            window.open("https://play.google.com/store/apps/details?id=app.phantom", "_blank")
+          }, 2000)
+        } else {
+          setError("Please install the Phantom wallet app from your device's app store.")
+        }
+        return
+      }
+    } else {
+      // Desktop browser extension check
+      phantomAvailable = !!window.solana?.isPhantom
+
+      if (!phantomAvailable) {
+        setError("Phantom wallet extension is not installed. Please install it from https://phantom.app/")
+        return
+      }
     }
 
     try {
       setIsConnecting(true)
       setError("")
 
+      // Get the Phantom provider
+      const provider = window.solana || window.phantom?.solana
+
+      if (!provider) {
+        throw new Error("Phantom wallet not found")
+      }
+
       // This will show the connection popup when user explicitly clicks
-      const response = await window.solana.connect()
+      const response = await provider.connect()
       const address = response.publicKey.toString()
 
       setWalletAddress(address)
@@ -89,6 +166,10 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
       if (err.code === 4001) {
         // User rejected the connection
         setError("Connection was cancelled. Please try again if you want to connect your wallet.")
+      } else if (err.message?.includes("not found")) {
+        setError(
+          "Phantom wallet not detected. Please make sure you're using the Phantom app browser or have the extension installed.",
+        )
       } else {
         setError(err.message || "Failed to connect wallet. Please try again.")
       }
@@ -182,15 +263,46 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
               <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
               <AlertTitle className="text-yellow-800 dark:text-yellow-300">Phantom Wallet Required</AlertTitle>
               <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                You need to install the Phantom wallet extension to continue.{" "}
-                <a
-                  href="https://phantom.app/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:no-underline"
-                >
-                  Download here
-                </a>
+                {/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? (
+                  <>
+                    You need to install the Phantom wallet app to continue. After installing, please open this page in
+                    the Phantom app browser.
+                    <div className="mt-2 space-y-2">
+                      <a
+                        href="https://apps.apple.com/app/phantom-solana-wallet/id1598432977"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block bg-black text-white px-3 py-1 rounded text-sm mr-2"
+                      >
+                        Download for iOS
+                      </a>
+                      <a
+                        href="https://play.google.com/store/apps/details?id=app.phantom"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block bg-green-600 text-white px-3 py-1 rounded text-sm"
+                      >
+                        Download for Android
+                      </a>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      <strong>Important:</strong> After installing, open the Phantom app and use the built-in browser to
+                      visit this page.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    You need to install the Phantom wallet extension to continue.{" "}
+                    <a
+                      href="https://phantom.app/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:no-underline"
+                    >
+                      Download here
+                    </a>
+                  </>
+                )}
               </AlertDescription>
             </Alert>
           )}

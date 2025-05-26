@@ -41,10 +41,10 @@ export default function Navbar() {
       }
 
       try {
-        const { solana } = window
-        if (solana && solana.isPhantom && !hasCheckedConnection) {
+        const provider = window.solana || window.phantom?.solana
+        if (provider?.isPhantom && !hasCheckedConnection) {
           // Only check for trusted connections to prevent popup
-          const response = await solana.connect({ onlyIfTrusted: true })
+          const response = await provider.connect({ onlyIfTrusted: true })
           if (response?.publicKey) {
             setWalletAddress(response.publicKey.toString())
             setWalletConnected(true)
@@ -80,15 +80,26 @@ export default function Navbar() {
 
   const connectWallet = async () => {
     try {
-      const { solana } = window
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      const provider = window.solana || window.phantom?.solana
 
-      if (!solana || !solana.isPhantom) {
-        alert("Phantom wallet is not installed. Please install it from https://phantom.app/")
+      if (!provider?.isPhantom) {
+        if (isMobile) {
+          // Redirect to Phantom app or app store
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+          if (isIOS) {
+            window.open("https://apps.apple.com/app/phantom-solana-wallet/id1598432977", "_blank")
+          } else {
+            window.open("https://play.google.com/store/apps/details?id=app.phantom", "_blank")
+          }
+        } else {
+          alert("Phantom wallet is not installed. Please install it from https://phantom.app/")
+        }
         return
       }
 
       // This will show the connection popup when user explicitly clicks
-      const response = await solana.connect()
+      const response = await provider.connect()
       setWalletAddress(response.publicKey.toString())
       setWalletConnected(true)
     } catch (err) {
