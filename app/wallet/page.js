@@ -44,6 +44,43 @@ const MOCK_TASK_COMPLETIONS = [
   },
 ]
 
+// Safe clipboard copy function
+async function copyToClipboard(text) {
+  try {
+    // Check if we're in a browser environment
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      throw new Error("Not in browser environment")
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+
+    // Fallback for older browsers
+    const textArea = document.createElement("textarea")
+    textArea.value = text
+    textArea.style.position = "fixed"
+    textArea.style.left = "-999999px"
+    textArea.style.top = "-999999px"
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+
+    const successful = document.execCommand("copy")
+    document.body.removeChild(textArea)
+
+    if (successful) {
+      return true
+    } else {
+      throw new Error("Copy command failed")
+    }
+  } catch (err) {
+    console.error("Failed to copy text to clipboard:", err)
+    throw new Error("Failed to copy to clipboard")
+  }
+}
+
 function WalletPageContent() {
   const toast = useToast()
   const [walletConnected, setWalletConnected] = useState(false)
@@ -151,9 +188,12 @@ function WalletPageContent() {
 
   const disconnectWallet = () => {
     try {
-      const { solana } = window
-      if (solana && solana.isPhantom) {
-        solana.disconnect()
+      // Only access window object in browser environment
+      if (typeof window !== "undefined") {
+        const { solana } = window
+        if (solana && solana.isPhantom) {
+          solana.disconnect()
+        }
       }
     } catch (err) {
       console.error("Error disconnecting wallet:", err)
@@ -167,11 +207,16 @@ function WalletPageContent() {
     setError("")
   }
 
-  const copyAddress = () => {
-    navigator.clipboard.writeText(walletAddress)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-    toast.success("Wallet address copied to clipboard!")
+  const copyAddress = async () => {
+    try {
+      await copyToClipboard(walletAddress)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+      toast.success("Wallet address copied to clipboard!")
+    } catch (err) {
+      console.error("Error copying address:", err)
+      toast.error("Failed to copy address. Please try again.")
+    }
   }
 
   // Format date for display
@@ -394,11 +439,10 @@ function WalletPageContent() {
                         >
                           <div className="flex items-center gap-3">
                             <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                task.points > 0
-                                  ? "bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400"
-                                  : "bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400"
-                              }`}
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${task.points > 0
+                                ? "bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400"
+                                : "bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400"
+                                }`}
                             >
                               {task.points > 0 ? <Award className="w-5 h-5" /> : <ExternalLink className="w-5 h-5" />}
                             </div>
@@ -413,11 +457,10 @@ function WalletPageContent() {
                           </div>
                           <div className="text-right">
                             <div
-                              className={`font-medium ${
-                                task.points > 0
-                                  ? "text-green-600 dark:text-green-400"
-                                  : "text-purple-600 dark:text-purple-400"
-                              }`}
+                              className={`font-medium ${task.points > 0
+                                ? "text-green-600 dark:text-green-400"
+                                : "text-purple-600 dark:text-purple-400"
+                                }`}
                             >
                               {task.points > 0 ? "+" : ""}
                               {task.points} points
