@@ -162,34 +162,50 @@ function AirdropContent() {
 
   // Update task timers
   useEffect(() => {
-    const timerIds = {}
+    const updateTaskTimers = () => {
+      const now = Date.now()
+      const newTimers = {}
 
-    // For each visited task that has a timestamp, start a countdown timer
-    Object.entries(visitTimestamps).forEach(([taskId, timestamp]) => {
-      if (!completedTasks.includes(taskId)) {
-        const updateTimer = () => {
-          const now = Date.now()
+      // Check each visited task
+      Object.entries(visitTimestamps).forEach(([taskId, timestamp]) => {
+        if (!completedTasks.includes(taskId)) {
           const elapsedTime = now - timestamp
           const remainingTime = Math.max(0, TASK_COMPLETION_DELAY - elapsedTime)
+          newTimers[taskId] = remainingTime > 0 ? Math.ceil(remainingTime / 1000) : 0
+        }
+      })
 
-          setTaskTimers((prev) => ({
-            ...prev,
-            [taskId]: remainingTime > 0 ? Math.ceil(remainingTime / 1000) : 0,
-          }))
+      // Also check localStorage for tasks visited in previous sessions
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("task_") && key.endsWith("_timestamp")) {
+          const taskId = key.replace("task_", "").replace("_timestamp", "")
+          const timestamp = Number.parseInt(localStorage.getItem(key))
+          const visited = localStorage.getItem(`task_${taskId}_visited`) === "true"
 
-          if (remainingTime > 0) {
-            timerIds[taskId] = setTimeout(updateTimer, 1000)
+          if (visited && !completedTasks.includes(taskId) && timestamp) {
+            const elapsedTime = now - timestamp
+            const remainingTime = Math.max(0, TASK_COMPLETION_DELAY - elapsedTime)
+            newTimers[taskId] = remainingTime > 0 ? Math.ceil(remainingTime / 1000) : 0
+
+            // Update state if not already set
+            if (!visitTimestamps[taskId]) {
+              setVisitTimestamps((prev) => ({ ...prev, [taskId]: timestamp }))
+              setVisitedTasks((prev) => ({ ...prev, [taskId]: true }))
+            }
           }
         }
+      })
 
-        updateTimer()
-      }
-    })
-
-    // Cleanup timers on unmount
-    return () => {
-      Object.values(timerIds).forEach((id) => clearTimeout(id))
+      setTaskTimers(newTimers)
     }
+
+    // Update immediately
+    updateTaskTimers()
+
+    // Update every second
+    const intervalId = setInterval(updateTaskTimers, 1000)
+
+    return () => clearInterval(intervalId)
   }, [visitTimestamps, completedTasks])
 
   // Handle returning from external links (add this after other useEffects)
@@ -386,6 +402,8 @@ function AirdropContent() {
   const openSocialLink = (task) => {
     if (task.link && typeof window !== "undefined") {
       // Mark the task as visited and record the timestamp
+      const visitTime = Date.now()
+
       setVisitedTasks((prev) => ({
         ...prev,
         [task.id]: true,
@@ -393,8 +411,12 @@ function AirdropContent() {
 
       setVisitTimestamps((prev) => ({
         ...prev,
-        [task.id]: Date.now(),
+        [task.id]: visitTime,
       }))
+
+      // Store in localStorage for persistence across page backgrounding
+      localStorage.setItem(`task_${task.id}_visited`, "true")
+      localStorage.setItem(`task_${task.id}_timestamp`, visitTime.toString())
 
       // Enhanced mobile and Phantom detection
       const userAgent = navigator.userAgent
@@ -408,24 +430,16 @@ function AirdropContent() {
       if (isMobile && isPhantomApp) {
         // We're in Phantom mobile app - use special handling
 
-        // Store task completion state
+        // Store task completion state with timestamp
         localStorage.setItem("taskReturnFlag", "true")
         localStorage.setItem("currentTaskId", task.id)
         localStorage.setItem("currentTaskName", task.name)
+        localStorage.setItem("taskVisitTime", visitTime.toString())
 
-        // Create a special link that opens in the same tab but allows return
-        const link = document.createElement("a")
-        link.href = task.link
-        link.target = "_blank"
-        link.rel = "noopener noreferrer"
-
-        // Add special attributes to help Phantom handle the link better
-        link.setAttribute("data-phantom-safe", "true")
-
-        // Show user instructions
+        // Show user instructions with timer info
         toast.info(
-          `Opening ${task.name}. After completing the task, you can return here using the back button or by switching back to this tab.`,
-          { duration: 6000 },
+          `Opening ${task.name}. You'll be able to complete the task after 10 seconds. The timer will continue even when you're on the external site.`,
+          { duration: 8000 },
         )
 
         // Use a timeout to ensure the toast is shown before navigation
@@ -460,13 +474,11 @@ function AirdropContent() {
         }, 500)
       } else if (isMobile && !isPhantomApp) {
         // Regular mobile browser - open in new tab
-        toast.info(
-          `Opening ${task.name} in a new tab. Please wait 10 seconds after visiting before completing the task.`,
-        )
+        toast.info(`Opening ${task.name} in a new tab. You'll be able to complete the task after 10 seconds.`)
         window.open(task.link, "_blank", "noopener,noreferrer")
       } else {
         // Desktop - open in new tab
-        toast.info(`Please wait 10 seconds after visiting before completing the task.`)
+        toast.info(`You'll be able to complete the task after 10 seconds.`)
         window.open(task.link, "_blank", "noopener,noreferrer")
       }
     }
@@ -476,9 +488,23 @@ function AirdropContent() {
   const handleReturnFromTask = () => {
     const taskId = localStorage.getItem("currentTaskId")
     const taskName = localStorage.getItem("currentTaskName")
+    const visitTime = localStorage.getItem("taskVisitTime")
 
     if (taskId && taskName) {
-      toast.success(`Welcome back from ${taskName}! You can now complete the task after the timer.`)
+      // Check if enough time has passed
+      if (visitTime) {
+        const elapsedTime = Date.now() - Number.parseInt(visitTime)
+        const remainingTime = Math.max(0, TASK_COMPLETION_DELAY - elapsedTime)
+
+        if (remainingTime === 0) {
+          toast.success(`Welcome back! You can now complete "${taskName}" task.`)
+        } else {
+          const remainingSeconds = Math.ceil(remainingTime / 1000)
+          toast.info(`Welcome back! You can complete "${taskName}" in ${remainingSeconds} seconds.`)
+        }
+      } else {
+        toast.success(`Welcome back from ${taskName}!`)
+      }
 
       // Clear the stored data
       localStorage.removeItem("taskReturnFlag")
@@ -486,6 +512,7 @@ function AirdropContent() {
       localStorage.removeItem("currentTaskName")
       localStorage.removeItem("phantomReturnUrl")
       localStorage.removeItem("phantomReturnTime")
+      localStorage.removeItem("taskVisitTime")
     }
   }
 
@@ -509,15 +536,27 @@ function AirdropContent() {
       return false
     }
 
-    // If the task hasn't been visited, it's not ready
-    if (!visitedTasks[taskId]) {
+    // Check if the task has been visited (from state or localStorage)
+    const visitedInState = visitedTasks[taskId]
+    const visitedInStorage = localStorage.getItem(`task_${taskId}_visited`) === "true"
+
+    if (!visitedInState && !visitedInStorage) {
+      return false
+    }
+
+    // Get timestamp (from state or localStorage)
+    let visitTime = visitTimestamps[taskId]
+    if (!visitTime) {
+      const storedTime = localStorage.getItem(`task_${taskId}_timestamp`)
+      visitTime = storedTime ? Number.parseInt(storedTime) : 0
+    }
+
+    if (!visitTime) {
       return false
     }
 
     // Check if enough time has passed since visiting
-    const visitTime = visitTimestamps[taskId] || 0
     const timeElapsed = Date.now() - visitTime
-
     return timeElapsed >= TASK_COMPLETION_DELAY
   }
 
@@ -702,7 +741,7 @@ function AirdropContent() {
 
   // Add this useEffect for better return handling
   useEffect(() => {
-    // Enhanced return detection
+    // Enhanced return detection with timestamp restoration
     const handleReturnDetection = () => {
       // Check if user is returning from a task
       const taskReturnFlag = localStorage.getItem("taskReturnFlag")
@@ -720,8 +759,23 @@ function AirdropContent() {
           localStorage.removeItem("currentTaskName")
           localStorage.removeItem("phantomReturnUrl")
           localStorage.removeItem("phantomReturnTime")
+          localStorage.removeItem("taskVisitTime")
         }
       }
+
+      // Restore task states from localStorage
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("task_") && key.endsWith("_visited")) {
+          const taskId = key.replace("task_", "").replace("_visited", "")
+          const timestamp = localStorage.getItem(`task_${taskId}_timestamp`)
+
+          if (timestamp) {
+            const visitTime = Number.parseInt(timestamp)
+            setVisitedTasks((prev) => ({ ...prev, [taskId]: true }))
+            setVisitTimestamps((prev) => ({ ...prev, [taskId]: visitTime }))
+          }
+        }
+      })
 
       // Check URL parameters for return indication
       const urlParams = new URLSearchParams(window.location.search)
@@ -745,6 +799,23 @@ function AirdropContent() {
           if (taskReturnFlag === "true") {
             handleReturnFromTask()
           }
+
+          // Recalculate timers when page becomes visible
+          const now = Date.now()
+          Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith("task_") && key.endsWith("_timestamp")) {
+              const taskId = key.replace("task_", "").replace("_timestamp", "")
+              const timestamp = Number.parseInt(localStorage.getItem(key))
+              const visited = localStorage.getItem(`task_${taskId}_visited`) === "true"
+
+              if (visited && !completedTasks.includes(taskId) && timestamp) {
+                const elapsedTime = now - timestamp
+                if (elapsedTime >= TASK_COMPLETION_DELAY) {
+                  toast.success(`Task "${taskId}" is now ready to complete!`)
+                }
+              }
+            }
+          })
         }, 500)
       }
     }
@@ -778,7 +849,15 @@ function AirdropContent() {
       window.removeEventListener("focus", handleWindowFocus)
       clearInterval(intervalId)
     }
-  }, [])
+  }, [completedTasks])
+
+  // Clean up localStorage for completed tasks
+  useEffect(() => {
+    completedTasks.forEach((taskId) => {
+      localStorage.removeItem(`task_${taskId}_visited`)
+      localStorage.removeItem(`task_${taskId}_timestamp`)
+    })
+  }, [completedTasks])
 
   return (
     <div className="pt-24 pb-16 min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -925,12 +1004,12 @@ function AirdropContent() {
                             <div
                               key={task.id}
                               className={`flex items-center justify-between p-4 border rounded-lg ${completedTasks.includes(task.id)
-                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                                : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
-                                  ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
-                                  : visitedTasks[task.id]
-                                    ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200/50 dark:border-yellow-800/50"
-                                    : "border-gray-200 dark:border-gray-700"
+                                  ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                                  : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
+                                    ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
+                                    : visitedTasks[task.id]
+                                      ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200/50 dark:border-yellow-800/50"
+                                      : "border-gray-200 dark:border-gray-700"
                                 } transition-all duration-300 hover:shadow-md`}
                             >
                               <div className="flex items-center">
