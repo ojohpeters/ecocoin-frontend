@@ -872,99 +872,100 @@ function AirdropContent() {
             </p>
           </div>
 
-          {/* URL Copy Section for Mobile Users */}
-          {typeof window !== "undefined" && (
-            <Card className="bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800 shadow-lg mb-8">
-              <CardHeader>
-                <CardTitle className="text-purple-800 dark:text-purple-300 flex items-center gap-2">
-                  <Copy className="w-5 h-5" />🔒 Secure Access
-                </CardTitle>
-                <CardDescription className="text-purple-700 dark:text-purple-400">
-                  Copy this URL to access EcoCoin safely in your Phantom wallet browser
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
-                    <label className="block text-sm font-medium text-purple-800 dark:text-purple-300 mb-2">
-                      Current Page URL:
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <Input
-                        type="text"
-                        value={window.location.href}
-                        readOnly
-                        className="flex-1 font-mono text-xs sm:text-sm bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
-                      />
-                      <Button
-                        onClick={async () => {
-                          try {
-                            await copyToClipboard(window.location.href)
-                            toast.success("Page URL copied! You can paste this in Phantom's browser.")
-                          } catch (err) {
-                            toast.error("Failed to copy URL. Please copy it manually from the address bar.")
-                          }
-                        }}
-                        variant="outline"
-                        size="sm"
-                        className="w-full sm:w-auto text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-600 hover:bg-purple-100 dark:hover:bg-purple-800"
-                      >
-                        <Copy className="w-4 h-4 mr-1" />
-                        Copy URL
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Instructions */}
-                  <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" />
-                      How to use this URL in Phantom:
-                    </h4>
-                    <div className="space-y-2 text-sm text-blue-700 dark:text-blue-400">
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
-                          1
-                        </span>
-                        <span>Copy the URL above using the "Copy URL" button</span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
-                          2
-                        </span>
-                        <span>Open your Phantom wallet app</span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
-                          3
-                        </span>
-                        <span>Tap the browser/search icon (🔍 or 🌐) in the bottom navigation bar</span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
-                          4
-                        </span>
-                        <span>Paste the URL in the search bar and press enter</span>
+          {/* URL Copy Section for Mobile Users Only */}
+          {typeof window !== "undefined" &&
+            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
+              <Card className="bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800 shadow-lg mb-8">
+                <CardHeader>
+                  <CardTitle className="text-purple-800 dark:text-purple-300 flex items-center gap-2">
+                    <Copy className="w-5 h-5" />🔒 Secure Access
+                  </CardTitle>
+                  <CardDescription className="text-purple-700 dark:text-purple-400">
+                    Copy this URL to access EcoCoin safely in your Phantom wallet browser
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
+                      <label className="block text-sm font-medium text-purple-800 dark:text-purple-300 mb-2">
+                        Current Page URL:
+                      </label>
+                      <div className="flex flex-col gap-2">
+                        <Input
+                          type="text"
+                          value={window.location.href}
+                          readOnly
+                          className="w-full font-mono text-xs bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
+                        />
+                        <Button
+                          onClick={async () => {
+                            try {
+                              await copyToClipboard(window.location.href)
+                              toast.success("Page URL copied! You can paste this in Phantom's browser.")
+                            } catch (err) {
+                              toast.error("Failed to copy URL. Please copy it manually from the address bar.")
+                            }
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-600 hover:bg-purple-100 dark:hover:bg-purple-800"
+                        >
+                          <Copy className="w-4 h-4 mr-1" />
+                          Copy URL
+                        </Button>
                       </div>
                     </div>
 
-                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                        <div className="text-xs text-green-700 dark:text-green-400">
-                          <p className="font-medium mb-1">🔒 Security Feature:</p>
-                          <p>
-                            Using Phantom's built-in browser ensures your wallet stays secure and prevents phishing
-                            attacks. Always verify the URL matches our official domain before connecting your wallet.
-                          </p>
+                    {/* Instructions */}
+                    <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        How to use this URL in Phantom:
+                      </h4>
+                      <div className="space-y-2 text-sm text-blue-700 dark:text-blue-400">
+                        <div className="flex items-start gap-3">
+                          <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
+                            1
+                          </span>
+                          <span>Copy the URL above using the "Copy URL" button</span>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
+                            2
+                          </span>
+                          <span>Open your Phantom wallet app</span>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
+                            3
+                          </span>
+                          <span>Tap the browser/search icon (🔍 or 🌐) in the bottom navigation bar</span>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
+                            4
+                          </span>
+                          <span>Paste the URL in the search bar and press enter</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                          <div className="text-xs text-green-700 dark:text-green-400">
+                            <p className="font-medium mb-1">🔒 Security Feature:</p>
+                            <p>
+                              Using Phantom's built-in browser ensures your wallet stays secure and prevents phishing
+                              attacks. Always verify the URL matches our official domain before connecting your wallet.
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            )}
 
           {/* Wallet Connection */}
           {!walletConnected ? (
@@ -1096,7 +1097,7 @@ function AirdropContent() {
                         return (
                           <div
                             key={task.id}
-                            className={`flex items-center justify-between p-4 border rounded-lg ${completedTasks.includes(task.id)
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg ${completedTasks.includes(task.id)
                               ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
                               : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
                                 ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
@@ -1105,34 +1106,42 @@ function AirdropContent() {
                                   : "border-gray-200 dark:border-gray-700"
                               } transition-all duration-300 hover:shadow-md`}
                           >
-                            <div className="flex items-center">
+                            <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
                               {completedTasks.includes(task.id) ? (
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mr-4">
+                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
                                   <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
                                 </div>
                               ) : visitedTasks[task.id] ? (
-                                <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/50 flex items-center justify-center mr-4">
+                                <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/50 flex items-center justify-center flex-shrink-0">
                                   <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
                                 </div>
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mr-4">
+                                <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
                                   {getSocialIcon(task.icon) || (
-                                    <span className="text-gray-600 dark:text-gray-400">{tasks.indexOf(task) + 1}</span>
+                                    <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                                      {tasks.indexOf(task) + 1}
+                                    </span>
                                   )}
                                 </div>
                               )}
-                              <div>
-                                <h4 className="font-medium text-gray-800 dark:text-gray-100">{task.name}</h4>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  {task.points} points
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-medium text-gray-800 dark:text-gray-100 break-words">
+                                  {task.name}
+                                </h4>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                  <span>{task.points} points</span>
                                   {(task.name.toLowerCase().includes("refer") ||
                                     task.name.toLowerCase().includes("friend") ||
-                                    task.name.toLowerCase().includes("invite")) &&
-                                    ` • Requires 5 referrals (${referralCount}/5)`}
-                                </p>
+                                    task.name.toLowerCase().includes("invite")) && (
+                                      <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
+                                        Requires 5 referrals ({referralCount}/5)
+                                      </span>
+                                    )}
+                                </div>
                               </div>
                             </div>
-                            <div className="flex space-x-2">
+
+                            <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full sm:w-auto">
                               {task.link &&
                                 !(
                                   task.name.toLowerCase().includes("refer") ||
@@ -1144,7 +1153,7 @@ function AirdropContent() {
                                     size="sm"
                                     onClick={() => openSocialLink(task)}
                                     disabled={completedTasks.includes(task.id)}
-                                    className={`text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 ${completedTasks.includes(task.id) ? "opacity-50 cursor-not-allowed" : ""
+                                    className={`w-full sm:w-auto text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 ${completedTasks.includes(task.id) ? "opacity-50 cursor-not-allowed" : ""
                                       }`}
                                   >
                                     {visitedTasks[task.id] ? "Revisit" : "Visit"}
@@ -1155,7 +1164,7 @@ function AirdropContent() {
                                 size="sm"
                                 disabled={buttonState.disabled}
                                 onClick={() => completeTask(task.id)}
-                                className={buttonState.className}
+                                className={`w-full sm:w-auto ${buttonState.className}`}
                               >
                                 {buttonState.text}
                               </Button>
