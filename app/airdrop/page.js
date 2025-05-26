@@ -950,7 +950,7 @@ function AirdropContent() {
                       Complete these tasks to earn points
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4 sm:p-6">
                     {loading.tasks ? (
                       <div className="flex justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-green-600 dark:text-green-400" />
@@ -961,8 +961,19 @@ function AirdropContent() {
                           <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                           <AlertTitle className="text-blue-800 dark:text-blue-300">Task Completion Process</AlertTitle>
                           <AlertDescription className="text-blue-700 dark:text-blue-400">
-                            You must first click "Visit" to open the social media link, then wait 10 seconds before you
-                            can complete the task.
+                            <div className="space-y-2">
+                              <p>
+                                You must first click "Visit" to open the social media link, then wait 10 seconds before
+                                you can complete the task.
+                              </p>
+                              <div className="text-xs bg-blue-100 dark:bg-blue-800/50 p-2 rounded border border-blue-200 dark:border-blue-700">
+                                <p className="font-medium">🔒 Security Tip for Mobile Users:</p>
+                                <p>
+                                  If using Phantom app, external links open safely within the app. You can return here
+                                  easily after visiting social media links.
+                                </p>
+                              </div>
+                            </div>
                           </AlertDescription>
                         </Alert>
                         {showReturnButton && (
@@ -1003,45 +1014,51 @@ function AirdropContent() {
                           return (
                             <div
                               key={task.id}
-                              className={`flex items-center justify-between p-4 border rounded-lg ${completedTasks.includes(task.id)
-                                  ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                                  : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
-                                    ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
-                                    : visitedTasks[task.id]
-                                      ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200/50 dark:border-yellow-800/50"
-                                      : "border-gray-200 dark:border-gray-700"
+                              className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg ${completedTasks.includes(task.id)
+                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                                : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
+                                  ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
+                                  : visitedTasks[task.id]
+                                    ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200/50 dark:border-yellow-800/50"
+                                    : "border-gray-200 dark:border-gray-700"
                                 } transition-all duration-300 hover:shadow-md`}
                             >
-                              <div className="flex items-center">
+                              <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
                                 {completedTasks.includes(task.id) ? (
-                                  <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mr-4">
+                                  <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
                                     <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
                                   </div>
                                 ) : visitedTasks[task.id] ? (
-                                  <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/50 flex items-center justify-center mr-4">
+                                  <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/50 flex items-center justify-center flex-shrink-0">
                                     <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
                                   </div>
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mr-4">
+                                  <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
                                     {getSocialIcon(task.icon) || (
-                                      <span className="text-gray-600 dark:text-gray-400">
+                                      <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
                                         {tasks.indexOf(task) + 1}
                                       </span>
                                     )}
                                   </div>
                                 )}
-                                <div>
-                                  <h4 className="font-medium text-gray-800 dark:text-gray-100">{task.name}</h4>
-                                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    {task.points} points
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="font-medium text-gray-800 dark:text-gray-100 break-words">
+                                    {task.name}
+                                  </h4>
+                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                    <span>{task.points} points</span>
                                     {(task.name.toLowerCase().includes("refer") ||
                                       task.name.toLowerCase().includes("friend") ||
-                                      task.name.toLowerCase().includes("invite")) &&
-                                      ` • Requires 5 referrals (${referralCount}/5)`}
-                                  </p>
+                                      task.name.toLowerCase().includes("invite")) && (
+                                        <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
+                                          Requires 5 referrals ({referralCount}/5)
+                                        </span>
+                                      )}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex space-x-2">
+
+                              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full sm:w-auto">
                                 {task.link &&
                                   !(
                                     task.name.toLowerCase().includes("refer") ||
@@ -1053,7 +1070,7 @@ function AirdropContent() {
                                       size="sm"
                                       onClick={() => openSocialLink(task)}
                                       disabled={completedTasks.includes(task.id)}
-                                      className={`text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 ${completedTasks.includes(task.id) ? "opacity-50 cursor-not-allowed" : ""
+                                      className={`w-full sm:w-auto text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 ${completedTasks.includes(task.id) ? "opacity-50 cursor-not-allowed" : ""
                                         }`}
                                     >
                                       {visitedTasks[task.id] ? "Revisit" : "Visit"}
@@ -1064,7 +1081,7 @@ function AirdropContent() {
                                   size="sm"
                                   disabled={buttonState.disabled}
                                   onClick={() => completeTask(task.id)}
-                                  className={buttonState.className}
+                                  className={`w-full sm:w-auto ${buttonState.className}`}
                                 >
                                   {buttonState.text}
                                 </Button>
