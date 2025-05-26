@@ -439,7 +439,34 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
               <AlertTitle className="text-purple-800 dark:text-purple-300">Mobile Device Detected</AlertTitle>
               <AlertDescription className="text-purple-700 dark:text-purple-400">
                 <div className="space-y-4">
-                  <p>For the best experience, you need to use the Phantom app browser:</p>
+                  <p className="font-medium">For security and best experience, use the Phantom app browser:</p>
+
+                  {/* URL Copy Field */}
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
+                    <label className="block text-sm font-medium text-purple-800 dark:text-purple-300 mb-2">
+                      🔒 Secure URL - Copy this link:
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        type="text"
+                        value={typeof window !== "undefined" ? window.location.href : ""}
+                        readOnly
+                        className="flex-1 font-mono text-xs sm:text-sm bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
+                      />
+                      <Button
+                        onClick={copyCurrentUrl}
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-600 hover:bg-purple-100 dark:hover:bg-purple-800"
+                      >
+                        <Copy className="w-4 h-4 mr-1" />
+                        Copy URL
+                      </Button>
+                    </div>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-2">
+                      This ensures you're connecting to the authentic EcoCoin website
+                    </p>
+                  </div>
 
                   {isTestingApp ? (
                     <div className="flex items-center gap-2 text-sm">
@@ -452,13 +479,75 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
                         <CheckCircle className="w-4 h-4" />
                         Phantom app detected on your device!
                       </div>
-                      <Button
-                        onClick={openInPhantomApp}
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                      >
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        Open in Phantom App
-                      </Button>
+
+                      {/* Step by step instructions */}
+                      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                        <h4 className="font-medium text-green-800 dark:text-green-300 mb-3">Follow these steps:</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-3 text-sm">
+                            <span className="w-6 h-6 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center text-green-700 dark:text-green-300 font-bold text-xs flex-shrink-0 mt-0.5">
+                              1
+                            </span>
+                            <div>
+                              <p className="font-medium">Copy the URL above</p>
+                              <p className="text-green-600 dark:text-green-400 text-xs">
+                                This ensures you're on the real EcoCoin site
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3 text-sm">
+                            <span className="w-6 h-6 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center text-green-700 dark:text-green-300 font-bold text-xs flex-shrink-0 mt-0.5">
+                              2
+                            </span>
+                            <div>
+                              <p className="font-medium">Open Phantom app</p>
+                              <p className="text-green-600 dark:text-green-400 text-xs">
+                                Look for the Phantom icon on your phone
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3 text-sm">
+                            <span className="w-6 h-6 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center text-green-700 dark:text-green-300 font-bold text-xs flex-shrink-0 mt-0.5">
+                              3
+                            </span>
+                            <div>
+                              <p className="font-medium">Tap the search/browser icon</p>
+                              <p className="text-green-600 dark:text-green-400 text-xs">
+                                It's usually at the bottom of the app (🔍 or 🌐)
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3 text-sm">
+                            <span className="w-6 h-6 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center text-green-700 dark:text-green-300 font-bold text-xs flex-shrink-0 mt-0.5">
+                              4
+                            </span>
+                            <div>
+                              <p className="font-medium">Paste the URL in the search bar</p>
+                              <p className="text-green-600 dark:text-green-400 text-xs">
+                                This opens EcoCoin safely within Phantom
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button
+                          onClick={openInPhantomApp}
+                          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Try Auto-Open
+                        </Button>
+                        <Button
+                          onClick={copyCurrentUrl}
+                          variant="outline"
+                          className="flex-1 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-600"
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copy URL
+                        </Button>
+                      </div>
                     </div>
                   ) : phantomAppDetected === false ? (
                     <div className="space-y-3">
@@ -466,13 +555,13 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
                         <AlertCircle className="w-4 h-4" />
                         Phantom app not detected. Please install it first.
                       </div>
-                      <div className="flex flex-col gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {environment.isIOS && (
                           <a
                             href="https://apps.apple.com/app/phantom-solana-wallet/id1598432977"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center bg-black text-white px-4 py-2 rounded-lg text-sm font-medium"
+                            className="inline-flex items-center justify-center bg-black text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
                           >
                             <Download className="w-4 h-4 mr-2" />
                             Download for iOS
@@ -483,7 +572,7 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
                             href="https://play.google.com/store/apps/details?id=app.phantom"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                            className="inline-flex items-center justify-center bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
                           >
                             <Download className="w-4 h-4 mr-2" />
                             Download for Android
@@ -492,6 +581,20 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
                       </div>
                     </div>
                   ) : null}
+
+                  {/* Security Notice */}
+                  <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div className="text-xs text-blue-700 dark:text-blue-400">
+                        <p className="font-medium mb-1">🔒 Security Feature:</p>
+                        <p>
+                          Using Phantom's browser ensures your wallet stays secure and prevents phishing attacks. Always
+                          verify the URL matches our official domain.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </AlertDescription>
             </Alert>
@@ -503,49 +606,70 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
               <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               <AlertTitle className="text-blue-800 dark:text-blue-300">Manual Instructions</AlertTitle>
               <AlertDescription className="text-blue-700 dark:text-blue-400">
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <p>If the app didn't open automatically, please follow these steps:</p>
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-2 text-sm">
+
+                  {/* URL Copy Field for manual instructions */}
+                  <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <label className="block text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                      Copy this URL:
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        type="text"
+                        value={typeof window !== "undefined" ? window.location.href : ""}
+                        readOnly
+                        className="flex-1 font-mono text-xs bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
+                      />
+                      <Button
+                        onClick={copyCurrentUrl}
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-600"
+                      >
+                        <Copy className="w-4 h-4 mr-1" />
+                        Copy
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 text-sm">
                       <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
                         1
                       </span>
                       <span>Open the Phantom app on your device</span>
                     </div>
-                    <div className="flex items-start gap-2 text-sm">
+                    <div className="flex items-start gap-3 text-sm">
                       <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
                         2
                       </span>
-                      <span>Tap the browser icon (globe) at the bottom</span>
+                      <span>Tap the browser/search icon (🔍 or 🌐) at the bottom navbar</span>
                     </div>
-                    <div className="flex items-start gap-2 text-sm">
+                    <div className="flex items-start gap-3 text-sm">
                       <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
                         3
                       </span>
-                      <div className="flex-1">
-                        <span>Navigate to this page or </span>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={copyCurrentUrl}
-                          className="p-0 h-auto text-blue-600 dark:text-blue-400 underline"
-                        >
-                          copy this URL
-                        </Button>
-                      </div>
+                      <span>Paste the copied URL in the search bar and press enter</span>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Button
                       onClick={openInPhantomApp}
                       variant="outline"
                       size="sm"
-                      className="text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700"
+                      className="flex-1 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700"
                     >
-                      Try Again
+                      Try Auto-Open Again
                     </Button>
-                    <Button onClick={() => setShowDeepLinkInstructions(false)} variant="outline" size="sm">
-                      Dismiss
+                    <Button
+                      onClick={() => setShowDeepLinkInstructions(false)}
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                    >
+                      I'll Do It Manually
                     </Button>
                   </div>
                 </div>
