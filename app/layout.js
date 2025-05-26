@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata = {
   title: "EcoCoin - Sustainable Cryptocurrency",
   description: "Join the green revolution with EcoCoin - earn rewards for environmental actions",
-  generator: '0xb17'
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({ children }) {
