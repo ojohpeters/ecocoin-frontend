@@ -20,7 +20,7 @@ const sections = [
     icon: <FaLeaf className="text-green-500 text-3xl" />,
     content:
       "With the emergence of cryptocurrencies, especially in recent years, the need to create a currency aimed at protecting the environment and sustainability has become more and more felt. Eco Token is designed as an innovative digital currency, with the aim of raising awareness of environmental issues and encouraging environmentally friendly behavior.",
-    visual: "/placeholder.svg?height=400&width=400",
+    visual: "/images/eco-token.png?height=400&width=400",
     visualAlt: "Eco Token Introduction",
     visualType: "image",
     bgColor: "from-green-50 to-green-100",
@@ -30,7 +30,7 @@ const sections = [
     icon: <BsGlobe2 className="text-green-500 text-3xl" />,
     content:
       "The main goal of Eco Token is to provide a financial platform that allows users to help protect the environment in addition to making financial transactions. Each transaction made with Eco Token automatically allocates a percentage of the amount to environmental projects.",
-    visual: "/placeholder.svg?height=400&width=400",
+    visual: "/images/eco-token.png?height=400&width=400",
     visualAlt: "Eco Token Purpose",
     visualType: "globe",
     bgColor: "from-green-100 to-green-50",
@@ -52,7 +52,7 @@ const sections = [
         text: "Transparency: All transactions and interactions are transparently recorded on the blockchain to ensure that investments are made in real and effective projects.",
       },
     ],
-    visual: "/placeholder.svg?height=400&width=400",
+    visual: "/images/eco-token.png?height=400&width=400",
     visualAlt: "Eco Token Features",
     visualType: "features",
     bgColor: "from-green-50 to-green-100",
@@ -67,7 +67,7 @@ const sections = [
         text: "Participation in green projects: Earn tokens by participating in environmental programs and social activities.",
       },
     ],
-    visual: "/placeholder.svg?height=400&width=400",
+    visual: "/images/eco-token.png?height=400&width=400",
     visualAlt: "Earn Eco Token",
     visualType: "earn",
     bgColor: "from-green-100 to-green-50",
@@ -81,7 +81,7 @@ const sections = [
       },
       { text: "Market volatility: Like other cryptocurrencies, Eco Token is also affected by market fluctuations." },
     ],
-    visual: "/placeholder.svg?height=400&width=400",
+    visual: "/images/eco-token.png?height=400&width=400",
     visualAlt: "Eco Token Challenges",
     visualType: "challenges",
     bgColor: "from-yellow-50 to-orange-50",
@@ -91,7 +91,7 @@ const sections = [
     icon: <FaLeaf className="text-green-500 text-3xl" />,
     content:
       "Eco Token is not only a digital currency, but also a movement towards creating a more sustainable and greener future. With the aim of promoting environmentally friendly behaviors and supporting environmental projects, Eco Token can be not only a financial investment but also an investment in the future of our earth. Let's move towards a better and more sustainable future together!",
-    visual: "/placeholder.svg?height=400&width=400",
+    visual: "/images/eco-token.png?height=400&width=400",
     visualAlt: "Eco Token Conclusion",
     visualType: "conclusion",
     bgColor: "from-green-100 to-green-200",
@@ -277,7 +277,7 @@ const VisualComponent = ({ type, image="/images/eco-token.png" }) => {
     default:
       return (
         <div className="relative w-full h-64 md:h-80 overflow-hidden rounded-2xl shadow-lg">
-          <Image src={image || "/placeholder.svg?height=400&width=400"} alt="Eco Token" fill className="object-cover" />
+          <Image src={image || "/images/eco-token.png?height=400&width=400"} alt="Eco Token" fill className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-green-900/50 to-transparent flex items-end p-6">
             <motion.div
               className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 text-green-800 font-medium"

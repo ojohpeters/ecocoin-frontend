@@ -41,7 +41,7 @@ export default function MiniGame() {
             <div className="relative w-full h-64 md:h-80 mb-8 rounded-xl overflow-hidden shadow-2xl">
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 z-10" />
               <Image
-                src="/images/game-preview.jpg" // Add this image to public/images/
+                src="/images/mini-game-bg.jpg" // Add this image to public/images/
                 alt="Mini Game Preview"
                 fill
                 className="object-cover"
