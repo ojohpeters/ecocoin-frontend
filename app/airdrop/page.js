@@ -109,6 +109,7 @@ function AirdropContent() {
   const [taskTimers, setTaskTimers] = useState({}) // Track countdown timers for tasks
 
   // Initialize connection and fetch tasks on component mount
+  // Fix the useEffect that accesses window.location
   useEffect(() => {
     // Initialize Solana connection
     try {
@@ -121,20 +122,38 @@ function AirdropContent() {
     // Load tasks
     fetchTasks()
 
-    // Check for referral in URL
-    try {
-      const urlParams = new URLSearchParams(window.location.search)
-      const ref = urlParams.get("ref")
-      if (ref) {
-        console.log("Referral detected:", ref)
-        setReferralCode(ref)
-        // Log the full referral code for debugging
-        console.log("Full referral code:", ref)
+    // Check for referral in URL - only in browser
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search)
+        const ref = urlParams.get("ref")
+        if (ref) {
+          console.log("Referral detected:", ref)
+          setReferralCode(ref)
+          console.log("Full referral code:", ref)
+        }
+      } catch (err) {
+        console.error("Error processing referral:", err)
       }
-    } catch (err) {
-      console.error("Error processing referral:", err)
     }
   }, [])
+
+  // Fix the useEffect that generates referral links
+  useEffect(() => {
+    if (walletConnected && walletAddress) {
+      fetchUserPoints()
+
+      // Generate referral link - only in browser
+      if (typeof window !== 'undefined') {
+        try {
+          const baseUrl = window.location.origin + window.location.pathname
+          setReferralLink(`${baseUrl}?ref=${walletAddress}`)
+        } catch (err) {
+          console.error("Error generating referral link:", err)
+        }
+      }
+    }
+  }, [walletConnected, walletAddress])
 
   // Fetch user points when wallet is connected
   useEffect(() => {
@@ -656,15 +675,14 @@ function AirdropContent() {
                           return (
                             <div
                               key={task.id}
-                              className={`flex items-center justify-between p-4 border rounded-lg ${
-                                completedTasks.includes(task.id)
-                                  ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                                  : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
-                                    ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
-                                    : visitedTasks[task.id]
-                                      ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200/50 dark:border-yellow-800/50"
-                                      : "border-gray-200 dark:border-gray-700"
-                              } transition-all duration-300 hover:shadow-md`}
+                              className={`flex items-center justify-between p-4 border rounded-lg ${completedTasks.includes(task.id)
+                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                                : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
+                                  ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
+                                  : visitedTasks[task.id]
+                                    ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200/50 dark:border-yellow-800/50"
+                                    : "border-gray-200 dark:border-gray-700"
+                                } transition-all duration-300 hover:shadow-md`}
                             >
                               <div className="flex items-center">
                                 {completedTasks.includes(task.id) ? (
@@ -707,9 +725,8 @@ function AirdropContent() {
                                       size="sm"
                                       onClick={() => openSocialLink(task)}
                                       disabled={completedTasks.includes(task.id)}
-                                      className={`text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                                        completedTasks.includes(task.id) ? "opacity-50 cursor-not-allowed" : ""
-                                      }`}
+                                      className={`text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 ${completedTasks.includes(task.id) ? "opacity-50 cursor-not-allowed" : ""
+                                        }`}
                                     >
                                       {visitedTasks[task.id] ? "Revisit" : "Visit"}
                                     </Button>
