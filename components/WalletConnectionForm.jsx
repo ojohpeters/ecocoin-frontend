@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Wallet, AlertCircle, CheckCircle, Loader2, Copy } from "lucide-react"
+import { Wallet, AlertCircle, CheckCircle, Loader2, Copy, ExternalLink, Smartphone } from "lucide-react"
 import { useToast } from "@/components/SimpleToast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -44,71 +44,94 @@ async function copyToClipboard(text) {
   }
 }
 
+// Enhanced mobile and Phantom detection
+const detectEnvironment = () => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return { isMobile: false, isPhantomApp: false, isPhantomInstalled: false }
+  }
+
+  const userAgent = navigator.userAgent
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+  const isIOS = /iPad|iPhone|iPod/.test(userAgent)
+  const isAndroid = /Android/.test(userAgent)
+
+  // Check if we're in Phantom's in-app browser
+  const isPhantomApp = !!(
+    userAgent.includes("Phantom") ||
+    window.phantom?.solana?.isPhantom ||
+    window.solana?.isPhantom
+  )
+
+  // Check if Phantom is installed (desktop extension or mobile app)
+  const isPhantomInstalled = !!(
+    (window.solana?.isPhantom || window.phantom?.solana?.isPhantom || (isMobile && (isIOS || isAndroid))) // Assume mobile users can install
+  )
+
+  return {
+    isMobile,
+    isIOS,
+    isAndroid,
+    isPhantomApp,
+    isPhantomInstalled,
+    userAgent,
+  }
+}
+
+// Generate Phantom deep link
+const generatePhantomDeepLink = (currentUrl) => {
+  const encodedUrl = encodeURIComponent(currentUrl)
+  return `https://phantom.app/ul/browse/${encodedUrl}?ref=ecocoin`
+}
+
 const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
   const toast = useToast()
   const [isConnecting, setIsConnecting] = useState(false)
   const [walletAddress, setWalletAddress] = useState("")
   const [error, setError] = useState("")
-  const [phantomInstalled, setPhantomInstalled] = useState(false)
   const [referralInput, setReferralInput] = useState(referralCode || "")
   const [hasCheckedConnection, setHasCheckedConnection] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
+  const [environment, setEnvironment] = useState({
+    isMobile: false,
+    isPhantomApp: false,
+    isPhantomInstalled: false,
+  })
+  const [showMobileInstructions, setShowMobileInstructions] = useState(false)
 
   useEffect(() => {
     // Only run in browser environment
     if (typeof window === "undefined") return
 
-    // Detect mobile device
-    const checkMobile = () => {
-      if (typeof navigator !== "undefined") {
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-      }
-      return false
+    const env = detectEnvironment()
+    setEnvironment(env)
+
+    console.log("Environment detected:", env)
+
+    // If mobile and not in Phantom app, show instructions
+    if (env.isMobile && !env.isPhantomApp) {
+      setShowMobileInstructions(true)
     }
 
-    setIsMobile(checkMobile())
+    // Auto-redirect to Phantom app if on mobile and not already in Phantom
+    if (env.isMobile && !env.isPhantomApp && env.isPhantomInstalled) {
+      const currentUrl = window.location.href
+      const phantomUrl = generatePhantomDeepLink(currentUrl)
 
-    // Check if Phantom wallet is installed
-    const checkPhantom = () => {
-      if (typeof window === "undefined") return
+      // Store the intention to connect
+      localStorage.setItem("phantomAutoConnect", "true")
+      localStorage.setItem("phantomReturnUrl", currentUrl)
 
-      const mobile = checkMobile()
+      // Show user what's happening
+      toast.info("Redirecting to Phantom app for better experience...")
 
-      if (mobile) {
-        // On mobile, check if we can detect Phantom through different methods
-        const hasPhantom = !!(
-          window.solana?.isPhantom ||
-          window.phantom?.solana?.isPhantom ||
-          // Check if we're in the Phantom in-app browser
-          (typeof navigator !== "undefined" && navigator.userAgent.includes("Phantom"))
-        )
-        setPhantomInstalled(hasPhantom)
-      } else {
-        // Desktop browser extension check
-        setPhantomInstalled(!!window.solana?.isPhantom)
-      }
+      // Redirect after a short delay
+      setTimeout(() => {
+        window.location.href = phantomUrl
+      }, 2000)
     }
 
-    checkPhantom()
-
-    // Also check when the page becomes visible (helps with mobile app switching)
-    const handleVisibilityChange = () => {
-      if (typeof document !== "undefined" && !document.hidden) {
-        setTimeout(checkPhantom, 500)
-      }
-    }
-
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", handleVisibilityChange)
-    }
-
-    // Only check for existing connection if user is on desktop or has explicitly interacted
+    // Check for existing connection only if in Phantom app or desktop
     const checkExistingConnection = async () => {
-      // Prevent auto-connection on mobile to avoid popup
-      const mobile = checkMobile()
-
-      if (mobile) {
-        console.log("Mobile device detected - skipping auto-connection check")
+      if (env.isMobile && !env.isPhantomApp) {
         setHasCheckedConnection(true)
         return
       }
@@ -123,94 +146,99 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
             if (onWalletConnected) {
               onWalletConnected(address, referralInput)
             }
+
+            // Clear auto-connect flag if it was set
+            localStorage.removeItem("phantomAutoConnect")
           }
         }
       } catch (err) {
-        // User hasn't connected before or rejected connection - this is normal
         console.log("No existing trusted connection found")
       } finally {
         setHasCheckedConnection(true)
       }
     }
 
-    if (!hasCheckedConnection) {
-      // Add a small delay to ensure page is fully loaded
-      setTimeout(checkExistingConnection, 1000)
+    // Check for auto-connect intention
+    const autoConnect = localStorage.getItem("phantomAutoConnect")
+    if (autoConnect === "true" && env.isPhantomApp) {
+      localStorage.removeItem("phantomAutoConnect")
+      // Auto-connect since user intended to connect
+      setTimeout(() => {
+        connectWallet()
+      }, 1000)
+    } else {
+      checkExistingConnection()
     }
 
-    return () => {
-      if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", handleVisibilityChange)
+    // Handle visibility change (user returning from external links)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && env.isPhantomApp) {
+        // User returned to the app, check if they completed any tasks
+        const taskReturn = localStorage.getItem("taskReturnFlag")
+        if (taskReturn) {
+          localStorage.removeItem("taskReturnFlag")
+          toast.success("Welcome back! You can now complete your tasks.")
+        }
       }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
   }, [onWalletConnected, referralInput, hasCheckedConnection])
 
   const connectWallet = async () => {
-    // Check for browser environment
     if (typeof window === "undefined" || typeof navigator === "undefined") {
       setError("Browser environment not available")
       return
     }
 
-    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    const env = detectEnvironment()
 
-    // Check for Phantom on mobile vs desktop
-    let phantomAvailable = false
+    // If mobile and not in Phantom app, redirect to Phantom
+    if (env.isMobile && !env.isPhantomApp) {
+      const currentUrl = window.location.href
+      const phantomUrl = generatePhantomDeepLink(currentUrl)
 
-    if (mobile) {
-      // On mobile, check multiple ways Phantom might be available
-      phantomAvailable = !!(
-        window.solana?.isPhantom ||
-        window.phantom?.solana?.isPhantom ||
-        navigator.userAgent.includes("Phantom")
-      )
+      // Store connection intention
+      localStorage.setItem("phantomAutoConnect", "true")
+      localStorage.setItem("phantomReturnUrl", currentUrl)
 
-      // If not available, try to open Phantom app or redirect to app store
-      if (!phantomAvailable) {
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-        const isAndroid = /Android/.test(navigator.userAgent)
+      toast.info("Redirecting to Phantom app...")
 
-        if (isIOS) {
-          // Try to open Phantom app, fallback to App Store
-          window.location.href =
-            "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.href) + "?ref=phantom"
-          setTimeout(() => {
-            window.open("https://apps.apple.com/app/phantom-solana-wallet/id1598432977", "_blank")
-          }, 2000)
-        } else if (isAndroid) {
-          // Try to open Phantom app, fallback to Play Store
-          window.location.href =
-            "https://phantom.app/ul/browse/" + encodeURIComponent(window.location.href) + "?ref=phantom"
-          setTimeout(() => {
-            window.open("https://play.google.com/store/apps/details?id=app.phantom", "_blank")
-          }, 2000)
-        } else {
-          setError("Please install the Phantom wallet app from your device's app store.")
+      // Try to open Phantom app
+      window.location.href = phantomUrl
+
+      // Fallback to app store if Phantom doesn't open
+      setTimeout(() => {
+        if (env.isIOS) {
+          window.open("https://apps.apple.com/app/phantom-solana-wallet/id1598432977", "_blank")
+        } else if (env.isAndroid) {
+          window.open("https://play.google.com/store/apps/details?id=app.phantom", "_blank")
         }
-        return
-      }
-    } else {
-      // Desktop browser extension check
-      phantomAvailable = !!window.solana?.isPhantom
+      }, 3000)
 
-      if (!phantomAvailable) {
+      return
+    }
+
+    // Check for Phantom availability
+    const provider = window.solana || window.phantom?.solana
+    if (!provider?.isPhantom) {
+      if (env.isMobile) {
+        setError("Please open this page in the Phantom app browser.")
+      } else {
         setError("Phantom wallet extension is not installed. Please install it from https://phantom.app/")
-        return
       }
+      return
     }
 
     try {
       setIsConnecting(true)
       setError("")
 
-      // Get the Phantom provider
-      const provider = window.solana || window.phantom?.solana
-
-      if (!provider) {
-        throw new Error("Phantom wallet not found")
-      }
-
-      // This will show the connection popup when user explicitly clicks
+      // Connect to Phantom
       const response = await provider.connect()
       const address = response.publicKey.toString()
 
@@ -220,15 +248,16 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
       if (onWalletConnected) {
         onWalletConnected(address, referralInput)
       }
+
+      // Clear any stored connection intentions
+      localStorage.removeItem("phantomAutoConnect")
+      localStorage.removeItem("phantomReturnUrl")
     } catch (err) {
       console.error("Error connecting wallet:", err)
       if (err.code === 4001) {
-        // User rejected the connection
         setError("Connection was cancelled. Please try again if you want to connect your wallet.")
       } else if (err.message?.includes("not found")) {
-        setError(
-          "Phantom wallet not detected. Please make sure you're using the Phantom app browser or have the extension installed.",
-        )
+        setError("Phantom wallet not detected. Please make sure you're using the Phantom app browser.")
       } else {
         setError(err.message || "Failed to connect wallet. Please try again.")
       }
@@ -244,7 +273,7 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
         await window.solana.disconnect()
       }
       setWalletAddress("")
-      setHasCheckedConnection(false) // Reset connection check
+      setHasCheckedConnection(false)
       toast.success("Wallet disconnected successfully!")
     } catch (err) {
       console.error("Error disconnecting wallet:", err)
@@ -262,6 +291,13 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
     }
   }
 
+  const openInPhantom = () => {
+    const currentUrl = window.location.href
+    const phantomUrl = generatePhantomDeepLink(currentUrl)
+    window.location.href = phantomUrl
+  }
+
+  // If wallet is connected, show connected state
   if (walletAddress) {
     return (
       <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
@@ -269,6 +305,11 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
           <CardTitle className="text-gray-800 dark:text-gray-100 flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
             Wallet Connected
+            {environment.isPhantomApp && (
+              <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-full">
+                Phantom App
+              </span>
+            )}
           </CardTitle>
           <CardDescription className="text-gray-600 dark:text-gray-300">
             Your Phantom wallet is successfully connected
@@ -296,6 +337,17 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
               </Button>
             </div>
 
+            {environment.isPhantomApp && (
+              <Alert className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800">
+                <Smartphone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <AlertTitle className="text-blue-800 dark:text-blue-300">Phantom App Detected</AlertTitle>
+                <AlertDescription className="text-blue-700 dark:text-blue-400">
+                  You're using the Phantom app browser. External links will open in new tabs and you can return here
+                  easily.
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex justify-end">
               <Button
                 variant="outline"
@@ -322,38 +374,77 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          {!phantomInstalled && (
+          {/* Mobile Instructions */}
+          {environment.isMobile && !environment.isPhantomApp && (
+            <Alert className="bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800">
+              <Smartphone className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              <AlertTitle className="text-purple-800 dark:text-purple-300">Mobile Users</AlertTitle>
+              <AlertDescription className="text-purple-700 dark:text-purple-400">
+                <div className="space-y-3">
+                  <p>For the best experience on mobile, please use the Phantom app browser:</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="w-6 h-6 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center text-purple-700 dark:text-purple-300 font-bold text-xs">
+                        1
+                      </span>
+                      Install Phantom app if you haven't already
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="w-6 h-6 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center text-purple-700 dark:text-purple-300 font-bold text-xs">
+                        2
+                      </span>
+                      Open Phantom app and use the built-in browser
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="w-6 h-6 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center text-purple-700 dark:text-purple-300 font-bold text-xs">
+                        3
+                      </span>
+                      Navigate to this page in the Phantom browser
+                    </div>
+                  </div>
+                  <Button onClick={openInPhantom} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Open in Phantom App
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Phantom Not Installed */}
+          {!environment.isPhantomInstalled && (
             <Alert className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800">
               <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
               <AlertTitle className="text-yellow-800 dark:text-yellow-300">Phantom Wallet Required</AlertTitle>
               <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                {isMobile ? (
-                  <>
-                    You need to install the Phantom wallet app to continue. After installing, please open this page in
-                    the Phantom app browser.
-                    <div className="mt-2 space-y-2">
-                      <a
-                        href="https://apps.apple.com/app/phantom-solana-wallet/id1598432977"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block bg-black text-white px-3 py-1 rounded text-sm mr-2"
-                      >
-                        Download for iOS
-                      </a>
-                      <a
-                        href="https://play.google.com/store/apps/details?id=app.phantom"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block bg-green-600 text-white px-3 py-1 rounded text-sm"
-                      >
-                        Download for Android
-                      </a>
+                {environment.isMobile ? (
+                  <div className="space-y-3">
+                    <p>You need to install the Phantom wallet app to continue.</p>
+                    <div className="flex flex-col gap-2">
+                      {environment.isIOS && (
+                        <a
+                          href="https://apps.apple.com/app/phantom-solana-wallet/id1598432977"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center bg-black text-white px-4 py-2 rounded-lg text-sm font-medium"
+                        >
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Download for iOS
+                        </a>
+                      )}
+                      {environment.isAndroid && (
+                        <a
+                          href="https://play.google.com/store/apps/details?id=app.phantom"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                        >
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Download for Android
+                        </a>
+                      )}
                     </div>
-                    <div className="mt-2 text-sm">
-                      <strong>Important:</strong> After installing, open the Phantom app and use the built-in browser to
-                      visit this page.
-                    </div>
-                  </>
+                  </div>
                 ) : (
                   <>
                     You need to install the Phantom wallet extension to continue.{" "}
@@ -371,6 +462,7 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
             </Alert>
           )}
 
+          {/* Referral Code */}
           {referralCode && (
             <Alert className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800">
               <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -381,7 +473,7 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
             </Alert>
           )}
 
-          {referralInput && !referralCode && (
+          {!referralCode && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Referral Code (Optional)
@@ -399,15 +491,21 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
             </div>
           )}
 
+          {/* Connect Button */}
           <Button
             onClick={connectWallet}
-            disabled={!phantomInstalled || isConnecting}
+            disabled={(!environment.isPhantomInstalled && !environment.isMobile) || isConnecting}
             className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white py-3 px-4 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
           >
             {isConnecting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Connecting...
+              </>
+            ) : environment.isMobile && !environment.isPhantomApp ? (
+              <>
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open in Phantom App
               </>
             ) : (
               <>
@@ -417,6 +515,7 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
             )}
           </Button>
 
+          {/* Error Display */}
           {error && (
             <Alert variant="destructive" className="bg-red-50 dark:bg-red-900/30 border-red-500">
               <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -425,6 +524,7 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
             </Alert>
           )}
 
+          {/* Help Text */}
           <div className="text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Don't have a Phantom wallet?{" "}

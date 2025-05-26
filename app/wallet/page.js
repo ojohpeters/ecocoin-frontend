@@ -8,78 +8,7 @@ import WalletConnectionForm from "@/components/WalletConnectionForm"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-
-// Mock task completion data - in a real app, this would come from your backend
-const MOCK_TASK_COMPLETIONS = [
-  {
-    id: "task1",
-    name: "Follow Twitter",
-    points: 200,
-    completedAt: new Date(Date.now() - 2 * 86400000).toISOString(), // 2 days ago
-  },
-  {
-    id: "task2",
-    name: "Join Telegram",
-    points: 100,
-    completedAt: new Date(Date.now() - 1.5 * 86400000).toISOString(), // 1.5 days ago
-  },
-  {
-    id: "task3",
-    name: "Subscribe YouTube",
-    points: 200,
-    completedAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-  },
-  {
-    id: "task4",
-    name: "Refer a Friend",
-    points: 350,
-    completedAt: new Date(Date.now() - 0.5 * 86400000).toISOString(), // 12 hours ago
-  },
-  {
-    id: "airdrop1",
-    name: "Airdrop Claim",
-    points: -1000, // Negative points means points were spent
-    tokens: 1000, // Tokens received
-    completedAt: new Date(Date.now() - 0.2 * 86400000).toISOString(), // 4.8 hours ago
-  },
-]
-
-// Safe clipboard copy function
-async function copyToClipboard(text) {
-  try {
-    // Check if we're in a browser environment
-    if (typeof window === "undefined" || typeof navigator === "undefined") {
-      throw new Error("Not in browser environment")
-    }
-
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-
-    // Fallback for older browsers
-    const textArea = document.createElement("textarea")
-    textArea.value = text
-    textArea.style.position = "fixed"
-    textArea.style.left = "-999999px"
-    textArea.style.top = "-999999px"
-    document.body.appendChild(textArea)
-    textArea.focus()
-    textArea.select()
-
-    const successful = document.execCommand("copy")
-    document.body.removeChild(textArea)
-
-    if (successful) {
-      return true
-    } else {
-      throw new Error("Copy command failed")
-    }
-  } catch (err) {
-    console.error("Failed to copy text to clipboard:", err)
-    throw new Error("Failed to copy to clipboard")
-  }
-}
+import * as apiService from "@/lib/api-service"
 
 function WalletPageContent() {
   const toast = useToast()
@@ -92,6 +21,10 @@ function WalletPageContent() {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState("")
   const [connection, setConnection] = useState(null)
+  const [referralCode, setReferralCode] = useState(null)
+  const [userPoints, setUserPoints] = useState(0)
+  const [completedTasks, setCompletedTasks] = useState([])
+  const [referralCount, setReferralCount] = useState(0)
 
   // Initialize Solana connection
   useEffect(() => {
@@ -104,44 +37,157 @@ function WalletPageContent() {
     }
   }, [])
 
+  // Add this useEffect after the existing ones for mobile state restoration
+  useEffect(() => {
+    // Restore wallet connection state for mobile users
+    const checkMobileWalletState = () => {
+      const userAgent = navigator.userAgent
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+      const isPhantomApp = !!(
+        userAgent.includes("Phantom") ||
+        window.phantom?.solana?.isPhantom ||
+        window.solana?.isPhantom
+      )
+
+      if (isMobile && isPhantomApp) {
+        const wasConnected = localStorage.getItem("walletConnectedInPhantom")
+        const storedAddress = localStorage.getItem("connectedWalletAddress")
+
+        if (wasConnected === "true" && storedAddress && !walletConnected) {
+          // Try to restore connection
+          if (window.solana?.isPhantom) {
+            window.solana
+              .connect({ onlyIfTrusted: true })
+              .then((response) => {
+                if (response.publicKey && response.publicKey.toString() === storedAddress) {
+                  handleWalletConnected(storedAddress)
+                }
+              })
+              .catch((err) => {
+                console.log("Could not restore wallet connection:", err)
+                // Clean up stale data
+                localStorage.removeItem("walletConnectedInPhantom")
+                localStorage.removeItem("connectedWalletAddress")
+              })
+          }
+        }
+      }
+    }
+
+    // Small delay to ensure Phantom is loaded
+    setTimeout(checkMobileWalletState, 1000)
+  }, [walletConnected])
+
   // Handle wallet connection
-  const handleWalletConnected = async (address) => {
+  const handleWalletConnected = async (address, refCode) => {
     try {
       setLoading(true)
       setError("")
       setWalletAddress(address)
       setWalletConnected(true)
 
+      // Enhanced mobile detection
+      const userAgent = navigator.userAgent
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+      const isPhantomApp = !!(
+        userAgent.includes("Phantom") ||
+        window.phantom?.solana?.isPhantom ||
+        window.solana?.isPhantom
+      )
+
+      // Show appropriate success message based on environment
+      if (isMobile && isPhantomApp) {
+        toast.success("Wallet connected in Phantom app! You're ready to earn EcoCoin.")
+      } else {
+        toast.success("Wallet connected successfully!")
+      }
+
       // Fetch wallet balance directly from Solana
       await fetchWalletBalance(address)
 
-      // Load task completion history
-      loadTaskCompletions()
+      // Load task completion history from API
+      await loadTaskCompletions()
+
+      // Use the provided refCode or the one from URL
+      const referralToUse = refCode || referralCode
+
+      // Log the referral information for debugging
+      console.log("Connecting wallet with referral info:", {
+        address,
+        referralToUse,
+        originalReferralCode: referralCode,
+        isMobile,
+        isPhantomApp,
+      })
+
+      // Register wallet with backend
+      try {
+        const result = await apiService.connectWallet(address, referralToUse)
+        console.log("Wallet registered successfully:", result)
+
+        // If the API returns user data, update the state
+        if (result.user) {
+          if (result.user.points) setUserPoints(result.user.points)
+          if (result.user.completedTasks) setCompletedTasks(result.user.completedTasks)
+          if (result.user.referrals) setReferralCount(result.user.referrals)
+        }
+      } catch (apiErr) {
+        console.error("API error registering wallet:", apiErr)
+        toast.warning("Connected to wallet, but had trouble registering with the server. Some features may be limited.")
+        // Continue even if registration fails - we'll try again when fetching points
+      }
+
+      // Store connection info for mobile users
+      if (isMobile && isPhantomApp) {
+        localStorage.setItem("walletConnectedInPhantom", "true")
+        localStorage.setItem("connectedWalletAddress", address)
+      }
     } catch (err) {
       console.error("Error handling wallet connection:", err)
-      setError("Failed to process wallet connection. Please try again.")
-      toast.error("Failed to process wallet connection. Please try again.")
+      setError(err.message || "Failed to process wallet connection. Please try again.")
+      toast.error(err.message || "Failed to process wallet connection. Please try again.")
+      setWalletConnected(false)
+      setWalletAddress("")
     } finally {
       setLoading(false)
     }
   }
 
-  // Load task completions
-  const loadTaskCompletions = () => {
+  // Load task completions from API
+  const loadTaskCompletions = async () => {
     try {
-      // In a real app, you would fetch this from your backend
-      // For now, we'll use the mock data
-      setTaskCompletions(MOCK_TASK_COMPLETIONS)
+      setLoading(true)
 
-      // Calculate total points
-      let points = 0
-      MOCK_TASK_COMPLETIONS.forEach((task) => {
-        points += task.points
-      })
-      setTotalPoints(points)
+      // Fetch user points data which includes completed tasks
+      const pointsData = await apiService.getUserPoints(walletAddress)
+
+      // If the API returns task completion history, use it
+      if (pointsData.tasks_completed && Array.isArray(pointsData.tasks_completed)) {
+        // Convert the task IDs to a format that matches your UI expectations
+        const taskHistory = pointsData.tasks_completed.map((taskId, index) => {
+          // You can enhance this by fetching task details from getTasks() API
+          return {
+            id: taskId,
+            name: `Task ${index + 1}`, // You might want to fetch actual task names
+            points: 100, // Default points, you might want to fetch actual points from tasks API
+            completedAt: new Date(Date.now() - index * 86400000).toISOString(), // Mock timestamps for now
+          }
+        })
+
+        setTaskCompletions(taskHistory)
+      } else {
+        setTaskCompletions([])
+      }
+
+      // Set total points from API
+      setTotalPoints(pointsData.total_points || 0)
     } catch (err) {
       console.error("Error loading task completions:", err)
       toast.error("Failed to load task history. Please try again.")
+      setTaskCompletions([])
+      setTotalPoints(0)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -205,6 +251,24 @@ function WalletPageContent() {
     setTaskCompletions([])
     setTotalPoints(0)
     setError("")
+  }
+
+  const copyToClipboard = (text) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text)
+    } else {
+      const textArea = document.createElement("textarea")
+      textArea.value = text
+      textArea.style.position = "absolute"
+      textArea.style.left = "-9999999px"
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      return new Promise((res, rej) => {
+        document.execCommand("copy") ? res() : rej()
+        textArea.remove()
+      })
+    }
   }
 
   const copyAddress = async () => {
@@ -430,7 +494,11 @@ function WalletPageContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {taskCompletions.length > 0 ? (
+                  {loading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-green-600 dark:text-green-400" />
+                    </div>
+                  ) : taskCompletions.length > 0 ? (
                     <div className="space-y-4">
                       {taskCompletions.map((task) => (
                         <div
@@ -479,11 +547,6 @@ function WalletPageContent() {
                       </AlertDescription>
                     </Alert>
                   )}
-
-                  <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 text-center">
-                    Note: For demonstration purposes, we're showing sample activity data. In a production environment,
-                    this would be fetched from your account history.
-                  </div>
                 </CardContent>
               </Card>
             </div>

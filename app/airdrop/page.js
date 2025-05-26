@@ -112,6 +112,7 @@ function AirdropContent() {
   const [transactions, setTransactions] = useState([])
   const [referralCode, setReferralCode] = useState("")
   const [taskTimers, setTaskTimers] = useState({}) // Track countdown timers for tasks
+  const [showReturnButton, setShowReturnButton] = useState(false)
 
   // Initialize connection and fetch tasks on component mount
   useEffect(() => {
@@ -190,6 +191,69 @@ function AirdropContent() {
       Object.values(timerIds).forEach((id) => clearTimeout(id))
     }
   }, [visitTimestamps, completedTasks])
+
+  // Handle returning from external links (add this after other useEffects)
+  useEffect(() => {
+    // Check if user is returning from an external link
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        const returnUrl = localStorage.getItem("phantomReturnUrl")
+        const taskId = localStorage.getItem("phantomTaskId")
+        const taskName = localStorage.getItem("phantomTaskName")
+
+        if (returnUrl && taskId && window.location.href === returnUrl) {
+          // User returned to the same page
+          toast.success(`Welcome back! You can now complete the "${taskName}" task after the timer.`)
+
+          // Clear the stored data
+          localStorage.removeItem("phantomReturnUrl")
+          localStorage.removeItem("phantomTaskId")
+          localStorage.removeItem("phantomTaskName")
+        }
+      }
+    }
+
+    // Check on page load if user was redirected back
+    const checkReturnFromTask = () => {
+      const urlParams = new URLSearchParams(window.location.search)
+      const returned = urlParams.get("returned")
+      const taskId = localStorage.getItem("phantomTaskId")
+
+      if (returned === "true" && taskId) {
+        const taskName = localStorage.getItem("phantomTaskName")
+        toast.success(`Welcome back! You can now complete the "${taskName}" task after the timer.`)
+
+        // Clear the stored data
+        localStorage.removeItem("phantomReturnUrl")
+        localStorage.removeItem("phantomTaskId")
+        localStorage.removeItem("phantomTaskName")
+
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+    }
+
+    checkReturnFromTask()
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [])
+
+  // Add this useEffect to detect when user is about to leave
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      const taskId = localStorage.getItem("phantomTaskId")
+      if (taskId) {
+        // Show return button or instructions
+        setShowReturnButton(true)
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [])
 
   // Handle wallet connection
   const handleWalletConnected = async (address, refCode) => {
@@ -332,11 +396,96 @@ function AirdropContent() {
         [task.id]: Date.now(),
       }))
 
-      // Open the link in a new tab - only in browser
-      window.open(task.link, "_blank")
+      // Enhanced mobile and Phantom detection
+      const userAgent = navigator.userAgent
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+      const isPhantomApp = !!(
+        userAgent.includes("Phantom") ||
+        window.phantom?.solana?.isPhantom ||
+        window.solana?.isPhantom
+      )
 
-      // Show a toast to inform the user
-      toast.info(`Please wait 10 seconds after visiting before completing the task.`)
+      if (isMobile && isPhantomApp) {
+        // We're in Phantom mobile app - use special handling
+
+        // Store task completion state
+        localStorage.setItem("taskReturnFlag", "true")
+        localStorage.setItem("currentTaskId", task.id)
+        localStorage.setItem("currentTaskName", task.name)
+
+        // Create a special link that opens in the same tab but allows return
+        const link = document.createElement("a")
+        link.href = task.link
+        link.target = "_blank"
+        link.rel = "noopener noreferrer"
+
+        // Add special attributes to help Phantom handle the link better
+        link.setAttribute("data-phantom-safe", "true")
+
+        // Show user instructions
+        toast.info(
+          `Opening ${task.name}. After completing the task, you can return here using the back button or by switching back to this tab.`,
+          { duration: 6000 },
+        )
+
+        // Use a timeout to ensure the toast is shown before navigation
+        setTimeout(() => {
+          // Try to open in a way that doesn't close the current tab
+          try {
+            // Method 1: Try window.open with specific parameters
+            const newWindow = window.open(
+              task.link,
+              "_blank",
+              "noopener=yes,noreferrer=yes,resizable=yes,scrollbars=yes",
+            )
+
+            // If window.open fails or is blocked, fallback to location
+            if (!newWindow || newWindow.closed) {
+              throw new Error("Popup blocked")
+            }
+
+            // Focus the new window
+            newWindow.focus()
+          } catch (error) {
+            console.log("Window.open failed, using location method")
+
+            // Method 2: Use location.href but with return handling
+            // Store current state more thoroughly
+            localStorage.setItem("phantomReturnUrl", window.location.href)
+            localStorage.setItem("phantomReturnTime", Date.now().toString())
+
+            // Navigate to the external site
+            window.location.href = task.link
+          }
+        }, 500)
+      } else if (isMobile && !isPhantomApp) {
+        // Regular mobile browser - open in new tab
+        toast.info(
+          `Opening ${task.name} in a new tab. Please wait 10 seconds after visiting before completing the task.`,
+        )
+        window.open(task.link, "_blank", "noopener,noreferrer")
+      } else {
+        // Desktop - open in new tab
+        toast.info(`Please wait 10 seconds after visiting before completing the task.`)
+        window.open(task.link, "_blank", "noopener,noreferrer")
+      }
+    }
+  }
+
+  // Add this new function after openSocialLink:
+  const handleReturnFromTask = () => {
+    const taskId = localStorage.getItem("currentTaskId")
+    const taskName = localStorage.getItem("currentTaskName")
+
+    if (taskId && taskName) {
+      toast.success(`Welcome back from ${taskName}! You can now complete the task after the timer.`)
+
+      // Clear the stored data
+      localStorage.removeItem("taskReturnFlag")
+      localStorage.removeItem("currentTaskId")
+      localStorage.removeItem("currentTaskName")
+      localStorage.removeItem("phantomReturnUrl")
+      localStorage.removeItem("phantomReturnTime")
     }
   }
 
@@ -551,6 +700,86 @@ function AirdropContent() {
     }
   }
 
+  // Add this useEffect for better return handling
+  useEffect(() => {
+    // Enhanced return detection
+    const handleReturnDetection = () => {
+      // Check if user is returning from a task
+      const taskReturnFlag = localStorage.getItem("taskReturnFlag")
+      const returnTime = localStorage.getItem("phantomReturnTime")
+      const currentTime = Date.now()
+
+      if (taskReturnFlag === "true") {
+        // Check if return is recent (within 5 minutes)
+        if (!returnTime || currentTime - Number.parseInt(returnTime) < 300000) {
+          handleReturnFromTask()
+        } else {
+          // Clear old data
+          localStorage.removeItem("taskReturnFlag")
+          localStorage.removeItem("currentTaskId")
+          localStorage.removeItem("currentTaskName")
+          localStorage.removeItem("phantomReturnUrl")
+          localStorage.removeItem("phantomReturnTime")
+        }
+      }
+
+      // Check URL parameters for return indication
+      const urlParams = new URLSearchParams(window.location.search)
+      const returned = urlParams.get("returned")
+      if (returned === "true") {
+        handleReturnFromTask()
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+    }
+
+    // Check on component mount
+    handleReturnDetection()
+
+    // Enhanced visibility change handler
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Small delay to ensure app is fully focused
+        setTimeout(() => {
+          const taskReturnFlag = localStorage.getItem("taskReturnFlag")
+          if (taskReturnFlag === "true") {
+            handleReturnFromTask()
+          }
+        }, 500)
+      }
+    }
+
+    // Enhanced focus handler for better return detection
+    const handleWindowFocus = () => {
+      setTimeout(() => {
+        const taskReturnFlag = localStorage.getItem("taskReturnFlag")
+        if (taskReturnFlag === "true") {
+          handleReturnFromTask()
+        }
+      }, 300)
+    }
+
+    // Add multiple event listeners for better detection
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("focus", handleWindowFocus)
+
+    // Also check periodically when page is visible
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        const taskReturnFlag = localStorage.getItem("taskReturnFlag")
+        if (taskReturnFlag === "true") {
+          handleReturnFromTask()
+        }
+      }
+    }, 2000)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("focus", handleWindowFocus)
+      clearInterval(intervalId)
+    }
+  }, [])
+
   return (
     <div className="pt-24 pb-16 min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4">
@@ -657,7 +886,38 @@ function AirdropContent() {
                             can complete the task.
                           </AlertDescription>
                         </Alert>
-
+                        {showReturnButton && (
+                          <Alert className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 mb-4">
+                            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <AlertTitle className="text-blue-800 dark:text-blue-300">Returning from Task?</AlertTitle>
+                            <AlertDescription className="text-blue-700 dark:text-blue-400">
+                              <div className="space-y-2">
+                                <p>
+                                  If you completed the social media task, click the button below to return and complete
+                                  the task.
+                                </p>
+                                <Button
+                                  onClick={() => {
+                                    const currentUrl = window.location.href
+                                    window.location.href = `${currentUrl}?returned=true`
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                  size="sm"
+                                >
+                                  I'm Back - Complete Task
+                                </Button>
+                                <Button
+                                  onClick={() => setShowReturnButton(false)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="ml-2"
+                                >
+                                  Dismiss
+                                </Button>
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        )}
                         {tasks.map((task) => {
                           const buttonState = getTaskButtonState(task)
 
