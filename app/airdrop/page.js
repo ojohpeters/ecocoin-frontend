@@ -49,9 +49,14 @@ function getSocialIcon(iconName, className = "w-5 h-5") {
   return iconMap[iconName] || null
 }
 
-// Utility function to copy text to clipboard
+// Fixed utility function to copy text to clipboard
 async function copyToClipboard(text) {
   try {
+    // Check if we're in a browser environment
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      throw new Error("Not in browser environment")
+    }
+
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text)
       return true
@@ -109,7 +114,6 @@ function AirdropContent() {
   const [taskTimers, setTaskTimers] = useState({}) // Track countdown timers for tasks
 
   // Initialize connection and fetch tasks on component mount
-  // Fix the useEffect that accesses window.location
   useEffect(() => {
     // Initialize Solana connection
     try {
@@ -123,7 +127,7 @@ function AirdropContent() {
     fetchTasks()
 
     // Check for referral in URL - only in browser
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       try {
         const urlParams = new URLSearchParams(window.location.search)
         const ref = urlParams.get("ref")
@@ -138,34 +142,19 @@ function AirdropContent() {
     }
   }, [])
 
-  // Fix the useEffect that generates referral links
+  // Fetch user points when wallet is connected and generate referral link
   useEffect(() => {
     if (walletConnected && walletAddress) {
       fetchUserPoints()
 
       // Generate referral link - only in browser
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         try {
           const baseUrl = window.location.origin + window.location.pathname
           setReferralLink(`${baseUrl}?ref=${walletAddress}`)
         } catch (err) {
           console.error("Error generating referral link:", err)
         }
-      }
-    }
-  }, [walletConnected, walletAddress])
-
-  // Fetch user points when wallet is connected
-  useEffect(() => {
-    if (walletConnected && walletAddress) {
-      fetchUserPoints()
-
-      // Generate referral link
-      try {
-        const baseUrl = window.location.origin + window.location.pathname
-        setReferralLink(`${baseUrl}?ref=${walletAddress}`)
-      } catch (err) {
-        console.error("Error generating referral link:", err)
       }
     }
   }, [walletConnected, walletAddress])
@@ -331,7 +320,7 @@ function AirdropContent() {
 
   // Open social media link and mark task as visited
   const openSocialLink = (task) => {
-    if (task.link) {
+    if (task.link && typeof window !== "undefined") {
       // Mark the task as visited and record the timestamp
       setVisitedTasks((prev) => ({
         ...prev,
@@ -343,7 +332,7 @@ function AirdropContent() {
         [task.id]: Date.now(),
       }))
 
-      // Open the link in a new tab
+      // Open the link in a new tab - only in browser
       window.open(task.link, "_blank")
 
       // Show a toast to inform the user

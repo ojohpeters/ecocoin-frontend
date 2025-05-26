@@ -8,6 +8,42 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 
+// Safe clipboard copy function
+async function copyToClipboard(text) {
+  try {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      throw new Error("Not in browser environment")
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+
+    // Fallback for older browsers
+    const textArea = document.createElement("textarea")
+    textArea.value = text
+    textArea.style.position = "fixed"
+    textArea.style.left = "-999999px"
+    textArea.style.top = "-999999px"
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+
+    const successful = document.execCommand("copy")
+    document.body.removeChild(textArea)
+
+    if (successful) {
+      return true
+    } else {
+      throw new Error("Copy command failed")
+    }
+  } catch (err) {
+    console.error("Failed to copy text to clipboard:", err)
+    throw new Error("Failed to copy to clipboard")
+  }
+}
+
 const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
   const toast = useToast()
   const [isConnecting, setIsConnecting] = useState(false)
@@ -16,27 +52,40 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
   const [phantomInstalled, setPhantomInstalled] = useState(false)
   const [referralInput, setReferralInput] = useState(referralCode || "")
   const [hasCheckedConnection, setHasCheckedConnection] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
+    // Only run in browser environment
+    if (typeof window === "undefined") return
+
+    // Detect mobile device
+    const checkMobile = () => {
+      if (typeof navigator !== "undefined") {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      }
+      return false
+    }
+
+    setIsMobile(checkMobile())
+
     // Check if Phantom wallet is installed
     const checkPhantom = () => {
-      if (typeof window !== "undefined") {
-        // Check for mobile Phantom app
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      if (typeof window === "undefined") return
 
-        if (isMobile) {
-          // On mobile, check if we can detect Phantom through different methods
-          const hasPhantom = !!(
-            window.solana?.isPhantom ||
-            window.phantom?.solana?.isPhantom ||
-            // Check if we're in the Phantom in-app browser
-            navigator.userAgent.includes("Phantom")
-          )
-          setPhantomInstalled(hasPhantom)
-        } else {
-          // Desktop browser extension check
-          setPhantomInstalled(!!window.solana?.isPhantom)
-        }
+      const mobile = checkMobile()
+
+      if (mobile) {
+        // On mobile, check if we can detect Phantom through different methods
+        const hasPhantom = !!(
+          window.solana?.isPhantom ||
+          window.phantom?.solana?.isPhantom ||
+          // Check if we're in the Phantom in-app browser
+          (typeof navigator !== "undefined" && navigator.userAgent.includes("Phantom"))
+        )
+        setPhantomInstalled(hasPhantom)
+      } else {
+        // Desktop browser extension check
+        setPhantomInstalled(!!window.solana?.isPhantom)
       }
     }
 
@@ -44,19 +93,21 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
 
     // Also check when the page becomes visible (helps with mobile app switching)
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
+      if (typeof document !== "undefined" && !document.hidden) {
         setTimeout(checkPhantom, 500)
       }
     }
 
-    document.addEventListener("visibilitychange", handleVisibilityChange)
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange)
+    }
 
     // Only check for existing connection if user is on desktop or has explicitly interacted
     const checkExistingConnection = async () => {
       // Prevent auto-connection on mobile to avoid popup
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      const mobile = checkMobile()
 
-      if (isMobile) {
+      if (mobile) {
         console.log("Mobile device detected - skipping auto-connection check")
         setHasCheckedConnection(true)
         return
@@ -88,17 +139,25 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
     }
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange)
+      }
     }
   }, [onWalletConnected, referralInput, hasCheckedConnection])
 
   const connectWallet = async () => {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    // Check for browser environment
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      setError("Browser environment not available")
+      return
+    }
+
+    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 
     // Check for Phantom on mobile vs desktop
     let phantomAvailable = false
 
-    if (isMobile) {
+    if (mobile) {
       // On mobile, check multiple ways Phantom might be available
       phantomAvailable = !!(
         window.solana?.isPhantom ||
@@ -181,7 +240,7 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
 
   const disconnectWallet = async () => {
     try {
-      if (window.solana?.isPhantom) {
+      if (typeof window !== "undefined" && window.solana?.isPhantom) {
         await window.solana.disconnect()
       }
       setWalletAddress("")
@@ -193,9 +252,14 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
     }
   }
 
-  const copyAddress = () => {
-    navigator.clipboard.writeText(walletAddress)
-    toast.success("Wallet address copied to clipboard!")
+  const copyAddress = async () => {
+    try {
+      await copyToClipboard(walletAddress)
+      toast.success("Wallet address copied to clipboard!")
+    } catch (err) {
+      console.error("Error copying address:", err)
+      toast.error("Failed to copy address. Please try again.")
+    }
   }
 
   if (walletAddress) {
@@ -263,7 +327,7 @@ const WalletConnectionForm = ({ onWalletConnected, referralCode }) => {
               <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
               <AlertTitle className="text-yellow-800 dark:text-yellow-300">Phantom Wallet Required</AlertTitle>
               <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                {/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? (
+                {isMobile ? (
                   <>
                     You need to install the Phantom wallet app to continue. After installing, please open this page in
                     the Phantom app browser.
