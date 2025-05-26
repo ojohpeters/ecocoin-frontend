@@ -105,7 +105,7 @@ export default function Footer() {
                 For technical support, partnership inquiries, or general questions about EcoCoin.
               </p>
               <div className="mt-4">
-                <p className="text-sm text-gray-400 mb-2">Token Mint Address:</p>
+                <p className="text-sm text-gray-400 mb-2">Airdrop Address:</p>
                 <p className="text-xs font-mono text-gray-500 break-all">{TOKEN_MINT_ADDRESS}</p>
               </div>
             </div>
