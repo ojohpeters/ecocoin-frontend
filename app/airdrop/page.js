@@ -706,13 +706,6 @@ function AirdropContent() {
       return
     }
 
-    // Removed fee payment check - let backend handle it
-    // if (!feePayment.paid) {
-    //   toast.error("You need to pay the 0.006 SOL fee before claiming your airdrop.")
-    //   setShowPaymentInstructions(true)
-    //   return
-    // }
-
     try {
       setLoading((prev) => ({ ...prev, claim: true }))
       setError("")
