@@ -1347,13 +1347,12 @@ function AirdropContent() {
                               Current balance: {userPoints} points = {possibleClaims} possible claim
                               {possibleClaims !== 1 ? "s" : ""}
                             </p>
-                            <p>Fee payment status: {feePayment.paid ? "✅ Paid" : "❌ Not paid"}</p>
                           </div>
                         </div>
 
                         <Button
                           onClick={claimAirdrop}
-                          disabled={possibleClaims === 0 || !feePayment.paid || loading.claim}
+                          disabled={possibleClaims === 0 || loading.claim}
                           className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white py-3 px-4 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500 text-sm sm:text-base"
                         >
                           {loading.claim ? (
@@ -1361,8 +1360,6 @@ function AirdropContent() {
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                               Processing...
                             </>
-                          ) : !feePayment.paid ? (
-                            "Pay Fee First (0.006 SOL)"
                           ) : possibleClaims > 0 ? (
                             `Claim ${TOKENS_PER_CLAIM} Tokens (${REQUIRED_POINTS} points)`
                           ) : (
