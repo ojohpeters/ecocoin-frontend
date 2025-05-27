@@ -232,6 +232,8 @@ function AirdropContent() {
     isPhantomApp: false,
     isPhantomInstalled: false,
   })
+  const [solanaPayURL, setSolanaPayURL] = useState("")
+  const [showPaymentInstructions, setShowPaymentInstructions] = useState(false)
 
   // Initialize connection and detect environment
   useEffect(() => {
@@ -270,6 +272,10 @@ function AirdropContent() {
   useEffect(() => {
     if (walletConnected && walletAddress) {
       fetchUserPoints()
+
+      // Generate Solana Pay URL
+      const payURL = generateSolanaPayURL(walletAddress)
+      setSolanaPayURL(payURL)
 
       // Generate referral link
       if (typeof window !== "undefined") {
@@ -509,6 +515,24 @@ function AirdropContent() {
     }
   }
 
+  // Copy Solana Pay URL
+  const copySolanaPayURL = async () => {
+    try {
+      await copyToClipboard(solanaPayURL)
+      toast.success("Solana Pay URL copied to clipboard!")
+    } catch (err) {
+      console.error("Error copying Solana Pay URL:", err)
+      toast.error("Failed to copy Solana Pay URL. Please try again.")
+    }
+  }
+
+  // Open Solana Pay URL
+  const openSolanaPayURL = () => {
+    if (solanaPayURL) {
+      window.open(solanaPayURL, "_blank")
+    }
+  }
+
   // Check if a task is ready to be completed
   const isTaskReadyToComplete = (taskId) => {
     if (completedTasks.includes(taskId)) return false
@@ -615,11 +639,16 @@ function AirdropContent() {
         }, 5000)
       } else {
         toast.error("Failed to claim airdrop. Please try again.")
+        setError("Failed to claim airdrop. Please try again.")
       }
     } catch (err) {
       console.error("Error claiming airdrop:", err)
-      toast.error(err.message || "Failed to claim airdrop. Please try again.")
-      setError(err.message || "Failed to claim airdrop. Please try again.")
+      const errorMessage =
+        err.message && err.message.includes("Unexpected token '<'")
+          ? "Fee not paid. Please complete the payment to claim your airdrop."
+          : err.message || "Failed to claim airdrop. Please try again."
+      toast.error(errorMessage)
+      setError(errorMessage)
     } finally {
       setLoading((prev) => ({ ...prev, claim: false }))
     }
@@ -765,13 +794,129 @@ function AirdropContent() {
                       indicatorClassName="bg-gradient-to-r from-green-500 to-green-400"
                     />
 
+                    {/* Fee Payment Status */}
+                    <div className="mt-4">
+                      <Alert className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-500">
+                        <CreditCard className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                        <AlertTitle className="text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
+                          Fee Payment Required
+                          <Button
+                            onClick={() => toast.info("Fee verification is handled by the backend. Please ensure payment is completed.")}
+                            variant="outline"
+                            size="sm"
+                            className="text-xs px-2 py-1"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            Check Payment
+                          </Button>
+                        </AlertTitle>
+                        <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+                          <div className="space-y-2">
+                            <p>You need to pay 0.006 SOL fee before claiming your airdrop.</p>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <Button
+                                onClick={() => setShowPaymentInstructions(!showPaymentInstructions)}
+                                variant="outline"
+                                size="sm"
+                                className="text-yellow-700 border-yellow-300"
+                              >
+                                {showPaymentInstructions ? "Hide" : "Show"} Payment Instructions
+                              </Button>
+                              {environment.isMobile && (
+                                <Button
+                                  onClick={openSolanaPayURL}
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-yellow-700 border-yellow-300"
+                                >
+                                  <ExternalLink className="h-4 w-4 mr-1" />
+                                  Pay with Solana Pay
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+
+                    {/* Payment Instructions */}
+                    {showPaymentInstructions && (
+                      <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg text-blue-800 dark:text-blue-300">
+                            Payment Instructions
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
+                                Send 0.006 SOL to:
+                              </label>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <Input
+                                  type="text"
+                                  value={AIRDROP_WALLET}
+                                  readOnly
+                                  className="flex-grow font-mono text-xs bg-white dark:bg-gray-800 border-blue-300 dark:border-blue-600"
+                                />
+                                <Button
+                                  onClick={() => copyToClipboard(AIRDROP_WALLET)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-blue-700 border-blue-300 flex-shrink-0"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                  <span className="ml-1 hidden sm:inline">Copy</span>
+                                </Button>
+                              </div>
+                            </div>
+
+                            {environment.isMobile && solanaPayURL && (
+                              <div>
+                                <label className="block text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
+                                  Or use Solana Pay URL:
+                                </label>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <Button
+                                    onClick={copySolanaPayURL}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-blue-700 border-blue-300"
+                                  >
+                                    <Copy className="h-4 w-4 mr-1" />
+                                    Copy Solana Pay URL
+                                  </Button>
+                                  <Button
+                                    onClick={openSolanaPayURL}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-blue-700 border-blue-300"
+                                  >
+                                    <ExternalLink className="h-4 w-4 mr-1" />
+                                    Open Solana Pay
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                              <p>● Payment will be automatically detected by the backend</p>
+                              <p>● Make sure you have enough SOL for transaction fees</p>
+                              <p>● Contact {SUPPORT_EMAIL} if you have issues</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {possibleClaims > 0 ? (
                       <Alert className="bg-green-50 dark:bg-green-900/30 border-green-500">
                         <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                         <AlertTitle className="text-green-800 dark:text-green-300">Ready to Claim!</AlertTitle>
                         <AlertDescription className="text-green-700 dark:text-green-400">
                           You can claim {possibleClaims} airdrop{possibleClaims > 1 ? "s" : ""} (
-                          {possibleClaims * TOKENS_PER_CLAIM} tokens total).
+                          {possibleClaims * TOKENS_PER_CLAIM} tokens total). Ensure the 0.006 SOL fee is paid.
                         </AlertDescription>
                       </Alert>
                     ) : (
@@ -1043,7 +1188,7 @@ function AirdropContent() {
                       Claim Your Airdrop
                     </CardTitle>
                     <CardDescription className="text-sm text-gray-600 dark:text-gray-300">
-                      Claim your EcoCoin tokens after completing tasks
+                      Claim your EcoCoin tokens after completing tasks and paying the fee
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -1073,6 +1218,7 @@ function AirdropContent() {
                             <p>
                               Each claim costs {REQUIRED_POINTS} points and gives you {TOKENS_PER_CLAIM} ECO tokens.
                             </p>
+                            <p>You must pay a 0.006 SOL fee before claiming your first airdrop.</p>
                             <p>
                               Current balance: {userPoints} points = {possibleClaims} possible claim
                               {possibleClaims !== 1 ? "s" : ""}
@@ -1118,6 +1264,7 @@ function AirdropContent() {
     </div>
   )
 }
+
 export default function Airdrop() {
   return (
     <ToastProvider>
