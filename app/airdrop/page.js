@@ -216,8 +216,6 @@ function AirdropContent() {
     taskCompletion: null,
     points: false,
     claim: false,
-    feeCheck: false,
-    paymentCheck: false,
   })
   const [error, setError] = useState("")
   const [claimSuccess, setClaimSuccess] = useState(false)
@@ -234,19 +232,6 @@ function AirdropContent() {
     isPhantomApp: false,
     isPhantomInstalled: false,
   })
-
-  // New state for Solana Pay and fee tracking
-  const [feePayment, setFeePayment] = useState({
-    paid: false,
-    checking: false,
-    transactionSignature: null,
-    amount: 0,
-    timestamp: null,
-  })
-  const [solanaPayURL, setSolanaPayURL] = useState("")
-  const [balance, setBalance] = useState({ sol: 0 })
-  const [lastPaymentCheck, setLastPaymentCheck] = useState(0)
-  const [showPaymentInstructions, setShowPaymentInstructions] = useState(false)
 
   // Initialize connection and detect environment
   useEffect(() => {
@@ -285,11 +270,6 @@ function AirdropContent() {
   useEffect(() => {
     if (walletConnected && walletAddress) {
       fetchUserPoints()
-      fetchWalletBalance()
-
-      // Generate Solana Pay URL
-      const payURL = generateSolanaPayURL(walletAddress)
-      setSolanaPayURL(payURL)
 
       // Generate referral link
       if (typeof window !== "undefined") {
@@ -300,27 +280,8 @@ function AirdropContent() {
           console.error("Error generating referral link:", err)
         }
       }
-
-      // Check for fee payment
-      checkForFeePayment()
     }
   }, [walletConnected, walletAddress])
-
-  // Periodic payment check
-  // Disable periodic payment check - let backend handle fee verification
-  // useEffect(() => {
-  //   if (walletConnected && walletAddress && connection && !feePayment.paid) {
-  //     const interval = setInterval(() => {
-  //       const now = Date.now()
-  //       // Check every 30 seconds, but not more than once per 10 seconds
-  //       if (now - lastPaymentCheck > 10000) {
-  //         checkForFeePayment()
-  //       }
-  //     }, 30000)
-
-  //     return () => clearInterval(interval)
-  //   }
-  // }, [walletConnected, walletAddress, connection, feePayment.paid, lastPaymentCheck])
 
   // Update task timers
   useEffect(() => {
@@ -401,60 +362,6 @@ function AirdropContent() {
       setWalletConnected(false)
       setWalletAddress("")
     }
-  }
-
-  // Fetch wallet balance
-  const fetchWalletBalance = async () => {
-    if (!connection || !walletAddress) return
-
-    try {
-      const publicKey = new web3.PublicKey(walletAddress)
-      const solBalance = await connection.getBalance(publicKey)
-      const solBalanceInSol = solBalance / web3.LAMPORTS_PER_SOL
-
-      setBalance({ sol: solBalanceInSol })
-    } catch (err) {
-      console.error("Error fetching wallet balance:", err)
-    }
-  }
-
-  // Check for fee payment
-  const checkForFeePayment = async () => {
-    if (!connection || !walletAddress) return
-
-    try {
-      setLoading((prev) => ({ ...prev, feeCheck: true }))
-      setLastPaymentCheck(Date.now())
-
-      const paymentResult = await checkFeePayment(connection, walletAddress)
-
-      if (paymentResult.paid) {
-        setFeePayment({
-          paid: true,
-          checking: false,
-          transactionSignature: paymentResult.transactionSignature,
-          amount: paymentResult.amount,
-          timestamp: paymentResult.timestamp,
-        })
-
-        toast.success("Fee payment confirmed! You can now claim your airdrop.")
-        setShowPaymentInstructions(false)
-      } else if (paymentResult.error) {
-        console.error("Error checking payment:", paymentResult.error)
-      }
-    } catch (err) {
-      console.error("Error checking fee payment:", err)
-    } finally {
-      setLoading((prev) => ({ ...prev, feeCheck: false }))
-    }
-  }
-
-  // Manual payment check
-  const manualPaymentCheck = async () => {
-    setLoading((prev) => ({ ...prev, paymentCheck: true }))
-    await checkForFeePayment()
-    await fetchWalletBalance() // Also refresh balance
-    setLoading((prev) => ({ ...prev, paymentCheck: false }))
   }
 
   // Fetch available tasks
@@ -602,24 +509,6 @@ function AirdropContent() {
     }
   }
 
-  // Copy Solana Pay URL
-  const copySolanaPayURL = async () => {
-    try {
-      await copyToClipboard(solanaPayURL)
-      toast.success("Solana Pay URL copied to clipboard!")
-    } catch (err) {
-      console.error("Error copying Solana Pay URL:", err)
-      toast.error("Failed to copy Solana Pay URL. Please try again.")
-    }
-  }
-
-  // Open Solana Pay URL
-  const openSolanaPayURL = () => {
-    if (solanaPayURL) {
-      window.open(solanaPayURL, "_blank")
-    }
-  }
-
   // Check if a task is ready to be completed
   const isTaskReadyToComplete = (taskId) => {
     if (completedTasks.includes(taskId)) return false
@@ -699,7 +588,7 @@ function AirdropContent() {
     }
   }
 
-  // Claim airdrop - now with fee verification
+  // Claim airdrop
   const claimAirdrop = async () => {
     if (userPoints < REQUIRED_POINTS) {
       toast.error(`You need at least ${REQUIRED_POINTS} points to claim your airdrop.`)
@@ -856,15 +745,10 @@ function AirdropContent() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Points Available</span>
                         <span className="font-bold text-gray-800 dark:text-gray-100">{userPoints} points</span>
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">SOL Balance</span>
-                        <span className="font-bold text-blue-600 dark:text-blue-400">{balance.sol.toFixed(4)} SOL</span>
                       </div>
 
                       <div className="flex justify-between items-center">
@@ -881,159 +765,13 @@ function AirdropContent() {
                       indicatorClassName="bg-gradient-to-r from-green-500 to-green-400"
                     />
 
-                    {/* Fee Payment Status */}
-                    <div className="mt-4">
-                      {feePayment.paid ? (
-                        <Alert className="bg-green-50 dark:bg-green-900/30 border-green-500">
-                          <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          <AlertTitle className="text-green-800 dark:text-green-300">Fee Payment Confirmed</AlertTitle>
-                          <AlertDescription className="text-green-700 dark:text-green-400">
-                            <div className="space-y-1">
-                              <p>Payment of {feePayment.amount?.toFixed(6)} SOL confirmed!</p>
-                              {feePayment.transactionSignature && (
-                                <p className="text-xs font-mono break-all">
-                                  TX: {feePayment.transactionSignature.substring(0, 20)}...
-                                </p>
-                              )}
-                            </div>
-                          </AlertDescription>
-                        </Alert>
-                      ) : (
-                        <Alert className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-500">
-                          <CreditCard className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                          <AlertTitle className="text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
-                            Fee Payment Required
-                            <Button
-                              onClick={manualPaymentCheck}
-                              variant="outline"
-                              size="sm"
-                              disabled={loading.paymentCheck || loading.feeCheck}
-                              className="text-xs px-2 py-1"
-                            >
-                              {loading.paymentCheck || loading.feeCheck ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-3 w-3" />
-                              )}
-                              Check Payment
-                            </Button>
-                          </AlertTitle>
-                          <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                            <div className="space-y-2">
-                              <p>You need to pay 0.006 SOL fee before claiming your airdrop.</p>
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <Button
-                                  onClick={() => setShowPaymentInstructions(!showPaymentInstructions)}
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-yellow-700 border-yellow-300"
-                                >
-                                  {showPaymentInstructions ? "Hide" : "Show"} Payment Instructions
-                                </Button>
-                                {environment.isMobile && (
-                                  <Button
-                                    onClick={openSolanaPayURL}
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-yellow-700 border-yellow-300"
-                                  >
-                                    <ExternalLink className="h-4 w-4 mr-1" />
-                                    Pay with Solana Pay
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                    </div>
-
-                    {/* Payment Instructions */}
-                    {showPaymentInstructions && !feePayment.paid && (
-                      <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg text-blue-800 dark:text-blue-300">
-                            Payment Instructions
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="space-y-3">
-                            <div>
-                              <label className="block text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
-                                Send 0.006 SOL to:
-                              </label>
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <Input
-                                  type="text"
-                                  value={AIRDROP_WALLET}
-                                  readOnly
-                                  className="flex-grow font-mono text-xs bg-white dark:bg-gray-800 border-blue-300 dark:border-blue-600"
-                                />
-                                <Button
-                                  onClick={() => copyToClipboard(AIRDROP_WALLET)}
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-blue-700 border-blue-300 flex-shrink-0"
-                                >
-                                  <Copy className="h-4 w-4" />
-                                  <span className="ml-1 hidden sm:inline">Copy</span>
-                                </Button>
-                              </div>
-                            </div>
-
-                            {environment.isMobile && solanaPayURL && (
-                              <div>
-                                <label className="block text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
-                                  Or use Solana Pay URL:
-                                </label>
-                                <div className="flex flex-col sm:flex-row gap-2">
-                                  <Button
-                                    onClick={copySolanaPayURL}
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-blue-700 border-blue-300"
-                                  >
-                                    <Copy className="h-4 w-4 mr-1" />
-                                    Copy Solana Pay URL
-                                  </Button>
-                                  <Button
-                                    onClick={openSolanaPayURL}
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-blue-700 border-blue-300"
-                                  >
-                                    <ExternalLink className="h-4 w-4 mr-1" />
-                                    Open Solana Pay
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
-                              <p>• Payment will be automatically detected within 30 seconds</p>
-                              <p>• Make sure you have enough SOL for transaction fees</p>
-                              <p>• Contact {SUPPORT_EMAIL} if you have issues</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {possibleClaims > 0 && feePayment.paid ? (
+                    {possibleClaims > 0 ? (
                       <Alert className="bg-green-50 dark:bg-green-900/30 border-green-500">
                         <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                         <AlertTitle className="text-green-800 dark:text-green-300">Ready to Claim!</AlertTitle>
                         <AlertDescription className="text-green-700 dark:text-green-400">
                           You can claim {possibleClaims} airdrop{possibleClaims > 1 ? "s" : ""} (
                           {possibleClaims * TOKENS_PER_CLAIM} tokens total).
-                        </AlertDescription>
-                      </Alert>
-                    ) : possibleClaims > 0 ? (
-                      <Alert className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-500">
-                        <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                        <AlertTitle className="text-yellow-800 dark:text-yellow-300">Almost Ready!</AlertTitle>
-                        <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                          You have enough points but need to pay the 0.006 SOL fee to claim your airdrop.
                         </AlertDescription>
                       </Alert>
                     ) : (
@@ -1305,7 +1043,7 @@ function AirdropContent() {
                       Claim Your Airdrop
                     </CardTitle>
                     <CardDescription className="text-sm text-gray-600 dark:text-gray-300">
-                      Claim your EcoCoin tokens after completing tasks and paying the fee
+                      Claim your EcoCoin tokens after completing tasks
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -1335,7 +1073,6 @@ function AirdropContent() {
                             <p>
                               Each claim costs {REQUIRED_POINTS} points and gives you {TOKENS_PER_CLAIM} ECO tokens.
                             </p>
-                            <p>You must pay a 0.006 SOL fee before claiming your first airdrop.</p>
                             <p>
                               Current balance: {userPoints} points = {possibleClaims} possible claim
                               {possibleClaims !== 1 ? "s" : ""}
@@ -1381,7 +1118,6 @@ function AirdropContent() {
     </div>
   )
 }
-
 export default function Airdrop() {
   return (
     <ToastProvider>
