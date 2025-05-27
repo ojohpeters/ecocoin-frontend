@@ -8,52 +8,90 @@ import AboutSection from "@/components/AboutSection"
 import RoadmapSection from "@/components/RoadmapSection"
 import Navbar from "@/components/Navbar"
 import { ToastProvider } from "@/components/SimpleToast"
+import * as apiService from "@/lib/api-service"
 
 export default function Home() {
   const [mounted, setMounted] = useState(false)
   const [stats, setStats] = useState({
     totalWallets: 0,
     tokensDistributed: 0,
-    projectsFunded: 0,
+    renewableEnergy: 100,
   })
 
   useEffect(() => {
     setMounted(true)
 
-    // Animate stats on mount
-    const animateStats = () => {
-      const targetStats = {
-        totalWallets: 12500,
-        tokensDistributed: 50000000,
-        projectsFunded: 25,
-      }
+    // Fetch real stats from API
+    const fetchStats = async () => {
+      try {
+        const airdropStats = await apiService.getAirdropStats()
 
-      const duration = 2000 // 2 seconds
-      const steps = 60
-      const stepDuration = duration / steps
-
-      let currentStep = 0
-
-      const interval = setInterval(() => {
-        currentStep++
-        const progress = currentStep / steps
-
-        setStats({
-          totalWallets: Math.floor(targetStats.totalWallets * progress),
-          tokensDistributed: Math.floor(targetStats.tokensDistributed * progress),
-          projectsFunded: Math.floor(targetStats.projectsFunded * progress),
-        })
-
-        if (currentStep >= steps) {
-          clearInterval(interval)
-          setStats(targetStats)
+        // Animate stats on mount
+        const targetStats = {
+          totalWallets: airdropStats.wallets_registered || 0,
+          tokensDistributed: airdropStats.airdrops_sent || 0,
+          renewableEnergy: 100, // Fixed value as mentioned in requirements
         }
-      }, stepDuration)
 
-      return () => clearInterval(interval)
+        const duration = 2000 // 2 seconds
+        const steps = 60
+        const stepDuration = duration / steps
+
+        let currentStep = 0
+
+        const interval = setInterval(() => {
+          currentStep++
+          const progress = currentStep / steps
+
+          setStats({
+            totalWallets: Math.floor(targetStats.totalWallets * progress),
+            tokensDistributed: Math.floor(targetStats.tokensDistributed * progress),
+            renewableEnergy: targetStats.renewableEnergy,
+          })
+
+          if (currentStep >= steps) {
+            clearInterval(interval)
+            setStats(targetStats)
+          }
+        }, stepDuration)
+
+        return () => clearInterval(interval)
+      } catch (error) {
+        console.error("Error fetching stats:", error)
+        // Fallback to default values if API fails
+        const fallbackStats = {
+          totalWallets: 12500,
+          tokensDistributed: 50000,
+          renewableEnergy: 100,
+        }
+
+        const duration = 2000
+        const steps = 60
+        const stepDuration = duration / steps
+
+        let currentStep = 0
+
+        const interval = setInterval(() => {
+          currentStep++
+          const progress = currentStep / steps
+
+          setStats({
+            totalWallets: Math.floor(fallbackStats.totalWallets * progress),
+            tokensDistributed: Math.floor(fallbackStats.tokensDistributed * progress),
+            renewableEnergy: fallbackStats.renewableEnergy,
+          })
+
+          if (currentStep >= steps) {
+            clearInterval(interval)
+            setStats(fallbackStats)
+          }
+        }, stepDuration)
+
+        return () => clearInterval(interval)
+      }
     }
 
-    const timer = setTimeout(animateStats, 500)
+    const timer = setTimeout(fetchStats, 500)
     return () => clearTimeout(timer)
   }, [])
 
@@ -147,19 +185,19 @@ export default function Home() {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-                    {(stats.tokensDistributed / 1000000).toFixed(1)}M
+                    {stats.tokensDistributed.toLocaleString()}
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Tokens Distributed</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Airdrops Sent</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl md:text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
-                    {stats.projectsFunded}
+                    {stats.renewableEnergy}%
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Projects Funded</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Renewable Energy</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl md:text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">100%</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Renewable Energy</div>
+                  <div className="text-2xl md:text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">24/7</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Carbon Neutral</div>
                 </div>
               </motion.div>
             </div>
