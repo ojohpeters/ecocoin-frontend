@@ -12,8 +12,6 @@ import {
   Youtube,
   Instagram,
   Users,
-  ExternalLink,
-  Wallet,
 } from "lucide-react"
 import * as web3 from "@solana/web3.js"
 import { useToast, ToastProvider } from "@/components/SimpleToast"
@@ -26,14 +24,15 @@ import * as apiService from "@/lib/api-service"
 import WalletConnectionForm from "@/components/WalletConnectionForm"
 
 // API configuration
-const REQUIRED_POINTS = 1000
+const REQUIRED_POINTS = 1000 // Changed from 100 to 1000 to match actual claim cost
+const TOKENS_PER_CLAIM = 1000
 const AIRDROP_WALLET = "DkrCNNn27B1Loz6eGpMYKAL7b5J4GY6wwQs8wqY9ERBT"
-const FEE_AMOUNT = 0.006 // 0.006 SOL
+const FEE_AMOUNT = 0.006 * web3.LAMPORTS_PER_SOL // 0.006 SOL in lamports
 const TASK_COMPLETION_DELAY = 10000 // 10 seconds in milliseconds
 const SUPPORT_EMAIL = "Support@ecotp.org"
 
 // Social media links
-const YOUTUBE_LINK = "https://www.youtube.com/@ecocoin2025"
+const YOUTUBE_LINK = "https://www.youtube.com/@NightStories2025"
 const INSTAGRAM_LINK = "https://www.instagram.com/ecocoin.eco?igsh=MWhsOW1uc3BhYzFjMQ=="
 const TELEGRAM_LINK = "https://t.me/ecocoinglobal"
 const TWITTER_LINK = "https://x.com/Ecocoin_Eco"
@@ -88,17 +87,6 @@ async function copyToClipboard(text) {
   }
 }
 
-// Generate Solana Pay URL for payment
-function generateSolanaPayURL(recipient, amount, label, message) {
-  const params = new URLSearchParams({
-    recipient,
-    amount: amount.toString(),
-    label: label || "EcoCoin Airdrop Fee",
-    message: message || "Payment for EcoCoin airdrop claim",
-  })
-  return `solana:${recipient}?${params.toString()}`
-}
-
 function AirdropContent() {
   const toast = useToast()
   const [walletConnected, setWalletConnected] = useState(false)
@@ -119,15 +107,16 @@ function AirdropContent() {
   const [claimSuccess, setClaimSuccess] = useState(false)
   const [claimResult, setClaimResult] = useState(null)
   const [referralLink, setReferralLink] = useState("")
-  const [referralCode, setReferralCode] = useState("") // This will be the UUID from API
   const [referralCount, setReferralCount] = useState(0)
   const [referralCopied, setReferralCopied] = useState(false)
   const [balance, setBalance] = useState({ eco: 0, sol: 0 })
   const [transactions, setTransactions] = useState([])
-  const [urlReferralCode, setUrlReferralCode] = useState("") // Referral from URL
+  const [referralCode, setReferralCode] = useState("")
   const [taskTimers, setTaskTimers] = useState({}) // Track countdown timers for tasks
   const [showReturnButton, setShowReturnButton] = useState(false)
-  const [hasClaimedAirdrop, setHasClaimedAirdrop] = useState(false)
+  const [userReferralCode, setUserReferralCode] = useState("")
+  const [possibleClaims, setPossibleClaims] = useState(0)
+  const [totalClaimed, setTotalClaimed] = useState(0)
 
   // Initialize connection and fetch tasks on component mount
   useEffect(() => {
@@ -149,7 +138,7 @@ function AirdropContent() {
         const ref = urlParams.get("ref")
         if (ref) {
           console.log("Referral detected:", ref)
-          setUrlReferralCode(ref)
+          setReferralCode(ref)
           console.log("Full referral code:", ref)
         }
       } catch (err) {
@@ -158,25 +147,22 @@ function AirdropContent() {
     }
   }, [])
 
-  // Fetch user points and referral code when wallet is connected
+  // Fetch user points when wallet is connected and generate referral link
   useEffect(() => {
     if (walletConnected && walletAddress) {
       fetchUserPoints()
-      fetchUserReferralCode()
-    }
-  }, [walletConnected, walletAddress])
 
-  // Generate referral link when referral code is available
-  useEffect(() => {
-    if (referralCode && typeof window !== "undefined") {
-      try {
-        const baseUrl = window.location.origin + window.location.pathname
-        setReferralLink(`${baseUrl}?ref=${referralCode}`)
-      } catch (err) {
-        console.error("Error generating referral link:", err)
+      // Generate referral link - only in browser
+      if (typeof window !== "undefined") {
+        try {
+          const baseUrl = window.location.origin + window.location.pathname
+          setReferralLink(`${baseUrl}?ref=${walletAddress}`)
+        } catch (err) {
+          console.error("Error generating referral link:", err)
+        }
       }
     }
-  }, [referralCode])
+  }, [walletConnected, walletAddress])
 
   // Update task timers
   useEffect(() => {
@@ -297,13 +283,13 @@ function AirdropContent() {
       setError("")
 
       // Use the provided refCode or the one from URL
-      const referralToUse = refCode || urlReferralCode
+      const referralToUse = refCode || referralCode
 
       // Log the referral information for debugging
       console.log("Connecting wallet with referral info:", {
         address,
         referralToUse,
-        originalReferralCode: urlReferralCode,
+        originalReferralCode: referralCode,
       })
 
       // Register wallet with backend
@@ -326,8 +312,9 @@ function AirdropContent() {
       }
 
       // Fetch user points regardless of wallet registration success
-      // This will also check the has_claimed status
       fetchUserPoints()
+
+      // Fetch user's referral code
       fetchUserReferralCode()
     } catch (err) {
       console.error("Error handling wallet connection:", err)
@@ -390,6 +377,21 @@ function AirdropContent() {
     }
   }
 
+  // Fetch user's referral code
+  const fetchUserReferralCode = async () => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || "/api"}/user/referral_code?wallet=${walletAddress}`,
+      )
+      if (response.ok) {
+        const data = await response.json()
+        setUserReferralCode(data.referral_code || "")
+      }
+    } catch (err) {
+      console.error("Error fetching referral code:", err)
+    }
+  }
+
   // Fetch user points and completed tasks
   const fetchUserPoints = async () => {
     try {
@@ -404,14 +406,14 @@ function AirdropContent() {
       setCompletedTasks(pointsData.tasks_completed || [])
       setReferralCount(pointsData.referrals || 0)
 
-      // Check if user has already claimed airdrop
-      setHasClaimedAirdrop(pointsData.has_claimed || false)
+      // Calculate how many claims are possible
+      const claims = Math.floor((pointsData.total_points || 0) / REQUIRED_POINTS)
+      setPossibleClaims(claims)
 
       console.log("Updated user points:", {
         points: pointsData.total_points,
         completedTasks: pointsData.tasks_completed,
         referrals: pointsData.referrals,
-        hasClaimed: pointsData.has_claimed,
       })
     } catch (err) {
       console.error("Error fetching user points:", err)
@@ -419,21 +421,6 @@ function AirdropContent() {
       setError("Failed to load your points. Please try again.")
     } finally {
       setLoading((prev) => ({ ...prev, points: false }))
-    }
-  }
-
-  // Remove this function entirely
-  // const checkAirdropClaimStatus = async () => { ... }
-
-  // Fetch user referral code
-  const fetchUserReferralCode = async () => {
-    try {
-      const referralData = await apiService.getUserReferralCode(walletAddress)
-      setReferralCode(referralData.referral_code)
-      console.log("User referral code:", referralData.referral_code)
-    } catch (err) {
-      console.error("Error fetching user referral code:", err)
-      // Don't show error toast for this as it's not critical
     }
   }
 
@@ -568,37 +555,6 @@ function AirdropContent() {
     }
   }
 
-  // Copy airdrop wallet address
-  const copyAirdropWallet = async () => {
-    try {
-      await copyToClipboard(AIRDROP_WALLET)
-      toast.success("Airdrop wallet address copied to clipboard!")
-    } catch (err) {
-      console.error("Error copying airdrop wallet:", err)
-      toast.error("Failed to copy airdrop wallet address. Please try again.")
-    }
-  }
-
-  // Handle Solana Pay payment
-  const handleSolanaPayment = () => {
-    try {
-      const solanaPayURL = generateSolanaPayURL(
-        AIRDROP_WALLET,
-        FEE_AMOUNT,
-        "EcoCoin Airdrop Fee",
-        "Payment for EcoCoin airdrop claim",
-      )
-
-      // Try to open Solana Pay URL
-      window.location.href = solanaPayURL
-
-      toast.info("Opening payment request... After payment, return here to claim your airdrop.", { duration: 8000 })
-    } catch (err) {
-      console.error("Error opening Solana Pay:", err)
-      toast.error("Failed to open payment request. Please try manual payment.")
-    }
-  }
-
   // Check if a task is ready to be completed
   const isTaskReadyToComplete = (taskId) => {
     // If the task is already completed, it's not ready
@@ -698,6 +654,49 @@ function AirdropContent() {
     }
   }
 
+  // Claim airdrop
+  const claimAirdrop = async () => {
+    if (userPoints < REQUIRED_POINTS) {
+      toast.error(`You need at least ${REQUIRED_POINTS} points to claim your airdrop.`)
+      return
+    }
+
+    try {
+      setLoading((prev) => ({ ...prev, claim: true }))
+      setError("")
+
+      // Use our API service to claim the airdrop
+      const result = await apiService.claimAirdrop(walletAddress)
+
+      console.log("Airdrop claim result:", result)
+
+      // Show success message with tokens received
+      if (result.tokens) {
+        setClaimSuccess(true)
+        setClaimResult(result)
+        setTotalClaimed((prev) => prev + result.tokens)
+        toast.success(`Airdrop claimed successfully! You received ${result.tokens} ECO tokens.`)
+
+        // Refresh user points to get updated balance
+        await fetchUserPoints()
+
+        // Reset claim success after a delay to allow multiple claims
+        setTimeout(() => {
+          setClaimSuccess(false)
+          setClaimResult(null)
+        }, 5000)
+      } else {
+        toast.error("Failed to claim airdrop. Please try again.")
+      }
+    } catch (err) {
+      console.error("Error claiming airdrop:", err)
+      toast.error(err.message || "Failed to claim airdrop. Please try again.")
+      setError(err.message || "Failed to claim airdrop. Please try again.")
+    } finally {
+      setLoading((prev) => ({ ...prev, claim: false }))
+    }
+  }
+
   // Get button state for task completion
   const getTaskButtonState = (task) => {
     // Check if this is a referral task
@@ -706,26 +705,7 @@ function AirdropContent() {
       task.name.toLowerCase().includes("friend") ||
       task.name.toLowerCase().includes("invite")
 
-    // Handle referral tasks specially - check actual referral count, not completed status
-    if (isReferralTask) {
-      if (referralCount >= 5) {
-        return {
-          variant: "outline",
-          text: "Completed",
-          disabled: true,
-          className: "text-green-700 dark:text-green-300 border-green-300 dark:border-green-600",
-        }
-      } else {
-        return {
-          variant: "outline",
-          text: `${referralCount}/5 friends`,
-          disabled: true,
-          className: "text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-600",
-        }
-      }
-    }
-
-    // For non-referral tasks, check if already completed
+    // If task is already completed
     if (completedTasks.includes(task.id)) {
       return {
         variant: "outline",
@@ -742,6 +722,25 @@ function AirdropContent() {
         text: <Loader2 className="h-4 w-4 animate-spin" />,
         disabled: true,
         className: "bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700",
+      }
+    }
+
+    // Handle referral tasks specially
+    if (isReferralTask) {
+      if (referralCount >= 5) {
+        return {
+          variant: "default",
+          text: "Complete",
+          disabled: false,
+          className: "bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700",
+        }
+      } else {
+        return {
+          variant: "outline",
+          text: `${referralCount}/5 friends`,
+          disabled: true,
+          className: "text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-600",
+        }
       }
     }
 
@@ -896,46 +895,6 @@ function AirdropContent() {
     })
   }, [completedTasks])
 
-  const claimAirdrop = async () => {
-    if (userPoints < REQUIRED_POINTS) {
-      toast.error("You need to earn more points to claim the airdrop.")
-      return
-    }
-
-    try {
-      setLoading((prev) => ({ ...prev, claim: true }))
-      setError("")
-      setClaimSuccess(false)
-      setClaimResult(null)
-
-      // Use our API service to claim the airdrop
-      const claimData = await apiService.claimAirdrop(walletAddress)
-
-      console.log("Airdrop claim result:", claimData)
-
-      // Update state with the response data
-      setClaimSuccess(true)
-      setClaimResult(claimData)
-      setHasClaimedAirdrop(true)
-
-      toast.success(claimData.message || "Airdrop claimed successfully!")
-    } catch (err) {
-      console.error("Error claiming airdrop:", err)
-
-      // Handle specific error cases
-      if (err.message.includes("already claimed")) {
-        toast.error("You have already claimed your airdrop.")
-        setHasClaimedAirdrop(true)
-      } else {
-        toast.error(err.message || "Failed to claim airdrop. Please try again.")
-      }
-
-      setError(err.message || "Failed to claim airdrop. Please try again.")
-    } finally {
-      setLoading((prev) => ({ ...prev, claim: false }))
-    }
-  }
-
   return (
     <div className="pt-24 pb-16 min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4">
@@ -949,529 +908,378 @@ function AirdropContent() {
             </p>
           </div>
 
-          {/* URL Copy Section for Mobile Users Only */}
-          {typeof window !== "undefined" &&
-            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && (
-              <Card className="bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800 shadow-lg mb-8">
-                <CardHeader>
-                  <CardTitle className="text-purple-800 dark:text-purple-300 flex items-center gap-2">
-                    <Copy className="w-5 h-5" />🔒 Secure Access
-                  </CardTitle>
-                  <CardDescription className="text-purple-700 dark:text-purple-400">
-                    Copy this URL to access EcoCoin safely in your Phantom wallet browser
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
-                      <label className="block text-sm font-medium text-purple-800 dark:text-purple-300 mb-2">
-                        Current Page URL:
-                      </label>
-                      <div className="flex flex-col gap-2">
-                        <Input
-                          type="text"
-                          value={window.location.href}
-                          readOnly
-                          className="w-full font-mono text-xs bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
-                        />
-                        <Button
-                          onClick={async () => {
-                            try {
-                              await copyToClipboard(window.location.href)
-                              toast.success("Page URL copied! You can paste this in Phantom's browser.")
-                            } catch (err) {
-                              toast.error("Failed to copy URL. Please copy it manually from the address bar.")
-                            }
-                          }}
-                          variant="outline"
-                          size="sm"
-                          className="w-full text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-600 hover:bg-purple-100 dark:hover:bg-purple-800"
-                        >
-                          <Copy className="w-4 h-4 mr-1" />
-                          Copy URL
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Instructions */}
-                    <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" />
-                        How to use this URL in Phantom:
-                      </h4>
-                      <div className="space-y-2 text-sm text-blue-700 dark:text-blue-400">
-                        <div className="flex items-start gap-3">
-                          <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
-                            1
-                          </span>
-                          <span>Copy the URL above using the "Copy URL" button</span>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
-                            2
-                          </span>
-                          <span>Open your Phantom wallet app</span>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
-                            3
-                          </span>
-                          <span>Tap the browser/search icon (🔍 or 🌐) in the bottom navigation bar</span>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs flex-shrink-0 mt-0.5">
-                            4
-                          </span>
-                          <span>Paste the URL in the search bar and press enter</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                          <div className="text-xs text-green-700 dark:text-green-400">
-                            <p className="font-medium mb-1">🔒 Security Feature:</p>
-                            <p>
-                              Using Phantom's built-in browser ensures your wallet stays secure and prevents phishing
-                              attacks. Always verify the URL matches our official domain before connecting your wallet.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-          {/* Wallet Connection */}
-          {!walletConnected ? (
-            <WalletConnectionForm onWalletConnected={handleWalletConnected} referralCode={urlReferralCode} />
-          ) : (
-            <>
-              {/* User Progress Card */}
-              <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="text-gray-800 dark:text-gray-100">Your Progress</CardTitle>
-                      <CardDescription className="text-gray-600 dark:text-gray-300">
-                        Wallet: {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
+          <div className="space-y-8">
+            {/* Wallet Connection */}
+            {!walletConnected ? (
+              <WalletConnectionForm onWalletConnected={handleWalletConnected} referralCode={referralCode} />
+            ) : (
+              <>
+                {/* User Progress Card */}
+                <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                  <CardHeader>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Points Earned</span>
-                      <span className="font-bold text-gray-800 dark:text-gray-100">
-                        {userPoints} / {REQUIRED_POINTS}
-                      </span>
-                    </div>
-                    <Progress
-                      value={(userPoints / REQUIRED_POINTS) * 100}
-                      className="h-2 bg-gray-200 dark:bg-gray-700"
-                      indicatorClassName="bg-gradient-to-r from-green-500 to-green-400"
-                    />
-
-                    {loading.points ? (
-                      <div className="flex justify-center py-4">
-                        <Loader2 className="h-6 w-6 animate-spin text-green-600 dark:text-green-400" />
+                      <div>
+                        <CardTitle className="text-gray-800 dark:text-gray-100">Your Progress</CardTitle>
+                        <CardDescription className="text-gray-600 dark:text-gray-300">
+                          Wallet: {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
+                        </CardDescription>
                       </div>
-                    ) : error && error.includes("Failed to load your points") ? (
-                      <div className="mt-2 flex justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={fetchUserPoints}
-                          className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
-                        >
-                          Retry Loading Points
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {userPoints >= REQUIRED_POINTS ? (
-                      <Alert className="bg-green-50 dark:bg-green-900/30 border-green-500">
-                        <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                        <AlertTitle className="text-green-800 dark:text-green-300">Congratulations!</AlertTitle>
-                        <AlertDescription className="text-green-700 dark:text-green-400">
-                          You've earned enough points to claim your airdrop.
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <Alert className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-500">
-                        <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                        <AlertTitle className="text-yellow-800 dark:text-yellow-300">Keep Going!</AlertTitle>
-                        <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                          You need {REQUIRED_POINTS - userPoints} more points to claim your airdrop.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Tasks Card */}
-              <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader>
-                  <CardTitle className="text-gray-800 dark:text-gray-100">Available Tasks</CardTitle>
-                  <CardDescription className="text-gray-600 dark:text-gray-300">
-                    Complete these tasks to earn points
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading.tasks ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="h-8 w-8 animate-spin text-green-600 dark:text-green-400" />
                     </div>
-                  ) : tasks.length > 0 ? (
+                  </CardHeader>
+                  <CardContent>
                     <div className="space-y-4">
-                      <Alert className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800">
-                        <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        <AlertTitle className="text-blue-800 dark:text-blue-300">Task Completion Process</AlertTitle>
-                        <AlertDescription className="text-blue-700 dark:text-blue-400">
-                          You must first click "Visit" to open the social media link, then wait 10 seconds before you
-                          can complete the task.
-                        </AlertDescription>
-                      </Alert>
-                      {showReturnButton && (
-                        <Alert className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 mb-4">
-                          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          <AlertTitle className="text-blue-800 dark:text-blue-300">Returning from Task?</AlertTitle>
-                          <AlertDescription className="text-blue-700 dark:text-blue-400">
-                            <div className="space-y-2">
-                              <p>
-                                If you completed the social media task, click the button below to return and complete
-                                the task.
-                              </p>
-                              <Button
-                                onClick={() => {
-                                  const currentUrl = window.location.href
-                                  window.location.href = `${currentUrl}?returned=true`
-                                }}
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                                size="sm"
-                              >
-                                I'm Back - Complete Task
-                              </Button>
-                              <Button
-                                onClick={() => setShowReturnButton(false)}
-                                variant="outline"
-                                size="sm"
-                                className="ml-2"
-                              >
-                                Dismiss
-                              </Button>
-                            </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Points Available</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">{userPoints} points</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Possible Claims</span>
+                        <span className="font-bold text-green-600 dark:text-green-400">
+                          {possibleClaims} × {TOKENS_PER_CLAIM} tokens
+                        </span>
+                      </div>
+
+                      <Progress
+                        value={Math.min((userPoints / REQUIRED_POINTS) * 100, 100)}
+                        className="h-2 bg-gray-200 dark:bg-gray-700"
+                        indicatorClassName="bg-gradient-to-r from-green-500 to-green-400"
+                      />
+
+                      {loading.points ? (
+                        <div className="flex justify-center py-4">
+                          <Loader2 className="h-6 w-6 animate-spin text-green-600 dark:text-green-400" />
+                        </div>
+                      ) : error && error.includes("Failed to load your points") ? (
+                        <div className="mt-2 flex justify-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={fetchUserPoints}
+                            className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
+                          >
+                            Retry Loading Points
+                          </Button>
+                        </div>
+                      ) : null}
+
+                      {possibleClaims > 0 ? (
+                        <Alert className="bg-green-50 dark:bg-green-900/30 border-green-500">
+                          <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <AlertTitle className="text-green-800 dark:text-green-300">Ready to Claim!</AlertTitle>
+                          <AlertDescription className="text-green-700 dark:text-green-400">
+                            You can claim {possibleClaims} airdrop{possibleClaims > 1 ? "s" : ""} (
+                            {possibleClaims * TOKENS_PER_CLAIM} tokens total).
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <Alert className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-500">
+                          <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                          <AlertTitle className="text-yellow-800 dark:text-yellow-300">Keep Going!</AlertTitle>
+                          <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+                            You need {REQUIRED_POINTS - (userPoints % REQUIRED_POINTS)} more points to claim your next
+                            airdrop.
                           </AlertDescription>
                         </Alert>
                       )}
-                      {tasks.map((task) => {
-                        const buttonState = getTaskButtonState(task)
-                        const isReferralTask =
-                          task.name.toLowerCase().includes("refer") ||
-                          task.name.toLowerCase().includes("friend") ||
-                          task.name.toLowerCase().includes("invite")
+                    </div>
+                  </CardContent>
+                </Card>
 
-                        return (
-                          <div
-                            key={task.id}
-                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border rounded-lg ${
-                              // For referral tasks, check referral count instead of completed status
-                              isReferralTask
-                                ? referralCount >= 5
-                                  ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                                  : "border-gray-200 dark:border-gray-700"
-                                : completedTasks.includes(task.id)
-                                  ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                                  : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
-                                    ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
-                                    : visitedTasks[task.id]
-                                      ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200/50 dark:border-yellow-800/50"
-                                      : "border-gray-200 dark:border-gray-700"
-                              } transition-all duration-300 hover:shadow-md`}
-                          >
-                            <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
-                              {/* For referral tasks, show completed icon only when 5/5 referrals */}
-                              {isReferralTask ? (
-                                referralCount >= 5 ? (
-                                  <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
-                                    <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                  </div>
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center flex-shrink-0">
-                                    <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                  </div>
-                                )
-                              ) : /* For non-referral tasks, use existing logic */
-                                completedTasks.includes(task.id) ? (
-                                  <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
+                {/* Tasks Card */}
+                <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                  <CardHeader>
+                    <CardTitle className="text-gray-800 dark:text-gray-100">Available Tasks</CardTitle>
+                    <CardDescription className="text-gray-600 dark:text-gray-300">
+                      Complete these tasks to earn points
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loading.tasks ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-green-600 dark:text-green-400" />
+                      </div>
+                    ) : tasks.length > 0 ? (
+                      <div className="space-y-4">
+                        <Alert className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800">
+                          <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <AlertTitle className="text-blue-800 dark:text-blue-300">Task Completion Process</AlertTitle>
+                          <AlertDescription className="text-blue-700 dark:text-blue-400">
+                            You must first click "Visit" to open the social media link, then wait 10 seconds before you
+                            can complete the task.
+                          </AlertDescription>
+                        </Alert>
+                        {showReturnButton && (
+                          <Alert className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 mb-4">
+                            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <AlertTitle className="text-blue-800 dark:text-blue-300">Returning from Task?</AlertTitle>
+                            <AlertDescription className="text-blue-700 dark:text-blue-400">
+                              <div className="space-y-2">
+                                <p>
+                                  If you completed the social media task, click the button below to return and complete
+                                  the task.
+                                </p>
+                                <Button
+                                  onClick={() => {
+                                    const currentUrl = window.location.href
+                                    window.location.href = `${currentUrl}?returned=true`
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                  size="sm"
+                                >
+                                  I'm Back - Complete Task
+                                </Button>
+                                <Button
+                                  onClick={() => setShowReturnButton(false)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="ml-2"
+                                >
+                                  Dismiss
+                                </Button>
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        {tasks.map((task) => {
+                          const buttonState = getTaskButtonState(task)
+
+                          return (
+                            <div
+                              key={task.id}
+                              className={`flex items-center justify-between p-4 border rounded-lg ${completedTasks.includes(task.id)
+                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                                : visitedTasks[task.id] && isTaskReadyToComplete(task.id)
+                                  ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/50"
+                                  : visitedTasks[task.id]
+                                    ? "bg-yellow-50/50 dark:bg-yellow-900/10 border-yellow-200/50 dark:border-yellow-800/50"
+                                    : "border-gray-200 dark:border-gray-700"
+                                } transition-all duration-300 hover:shadow-md`}
+                            >
+                              <div className="flex items-center">
+                                {completedTasks.includes(task.id) ? (
+                                  <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mr-4">
                                     <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
                                   </div>
                                 ) : visitedTasks[task.id] ? (
-                                  <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/50 flex items-center justify-center flex-shrink-0">
+                                  <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/50 flex items-center justify-center mr-4">
                                     <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
                                   </div>
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                                  <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mr-4">
                                     {getSocialIcon(task.icon) || (
-                                      <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                                      <span className="text-gray-600 dark:text-gray-400">
                                         {tasks.indexOf(task) + 1}
                                       </span>
                                     )}
                                   </div>
                                 )}
-                              <div className="min-w-0 flex-1">
-                                <h4 className="font-medium text-gray-800 dark:text-gray-100 break-words">
-                                  {task.name}
-                                </h4>
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                  <span>{task.points} points</span>
-                                  {isReferralTask && (
-                                    <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">
-                                      Requires 5 referrals ({referralCount}/5)
-                                    </span>
-                                  )}
+                                <div>
+                                  <h4 className="font-medium text-gray-800 dark:text-gray-100">{task.name}</h4>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    {task.points} points
+                                    {(task.name.toLowerCase().includes("refer") ||
+                                      task.name.toLowerCase().includes("friend") ||
+                                      task.name.toLowerCase().includes("invite")) &&
+                                      ` • Requires 5 referrals (${referralCount}/5)`}
+                                  </p>
                                 </div>
                               </div>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full sm:w-auto">
-                              {task.link && !isReferralTask && (
+                              <div className="flex space-x-2">
+                                {task.link &&
+                                  !(
+                                    task.name.toLowerCase().includes("refer") ||
+                                    task.name.toLowerCase().includes("friend") ||
+                                    task.name.toLowerCase().includes("invite")
+                                  ) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openSocialLink(task)}
+                                      disabled={completedTasks.includes(task.id)}
+                                      className={`text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 ${completedTasks.includes(task.id) ? "opacity-50 cursor-not-allowed" : ""
+                                        }`}
+                                    >
+                                      {visitedTasks[task.id] ? "Revisit" : "Visit"}
+                                    </Button>
+                                  )}
                                 <Button
-                                  variant="outline"
+                                  variant={buttonState.variant}
                                   size="sm"
-                                  onClick={() => openSocialLink(task)}
-                                  disabled={completedTasks.includes(task.id)}
-                                  className={`w-full sm:w-auto text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 ${completedTasks.includes(task.id) ? "opacity-50 cursor-not-allowed" : ""
-                                    }`}
+                                  disabled={buttonState.disabled}
+                                  onClick={() => completeTask(task.id)}
+                                  className={buttonState.className}
                                 >
-                                  {visitedTasks[task.id] ? "Revisit" : "Visit"}
+                                  {buttonState.text}
                                 </Button>
-                              )}
-                              <Button
-                                variant={buttonState.variant}
-                                size="sm"
-                                disabled={buttonState.disabled}
-                                onClick={() => completeTask(task.id)}
-                                className={`w-full sm:w-auto ${buttonState.className}`}
-                              >
-                                {buttonState.text}
-                              </Button>
+                              </div>
                             </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                      <AlertCircle className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-3" />
-                      <p>Failed to load tasks. Please try refreshing the page.</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-4 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
-                        onClick={fetchTasks}
-                      >
-                        Retry
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Referral Card */}
-              <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader>
-                  <CardTitle className="text-gray-800 dark:text-gray-100">Refer Friends</CardTitle>
-                  <CardDescription className="text-gray-600 dark:text-gray-300">
-                    Share your referral link and earn points when friends join
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {referralLink ? (
-                      <div className="flex items-center">
-                        <Input
-                          type="text"
-                          value={referralLink}
-                          readOnly
-                          className="flex-grow font-mono text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
-                        />
-                        <Button
-                          onClick={copyReferralLink}
-                          variant="outline"
-                          size="icon"
-                          className="ml-2 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          {referralCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                        </Button>
+                          )
+                        })}
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center py-4">
-                        <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
-                        <span className="text-gray-500 dark:text-gray-400">Loading referral link...</span>
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <AlertCircle className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-3" />
+                        <p>Failed to load tasks. Please try refreshing the page.</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-4 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
+                          onClick={fetchTasks}
+                        >
+                          Retry
+                        </Button>
                       </div>
                     )}
+                  </CardContent>
+                </Card>
 
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        You have referred {referralCount} friends
+                {/* Referral Card */}
+                <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                  <CardHeader>
+                    <CardTitle className="text-gray-800 dark:text-gray-100">Refer Friends</CardTitle>
+                    <CardDescription className="text-gray-600 dark:text-gray-300">
+                      Share your referral link and earn points when friends join
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Your Referral Link
+                        </label>
+                        <div className="flex items-center">
+                          <Input
+                            type="text"
+                            value={referralLink}
+                            readOnly
+                            className="flex-grow font-mono text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                          />
+                          <Button
+                            onClick={copyReferralLink}
+                            variant="outline"
+                            size="icon"
+                            className="ml-2 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            {referralCopied ? (
+                              <Check className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
 
-              {/* Claim Airdrop Card */}
-              <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader>
-                  <CardTitle className="text-gray-800 dark:text-gray-100">Claim Your Airdrop</CardTitle>
-                  <CardDescription className="text-gray-600 dark:text-gray-300">
-                    {hasClaimedAirdrop
-                      ? "You have already claimed your airdrop"
-                      : "Claim your EcoCoin tokens after completing tasks and payment"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {hasClaimedAirdrop ? (
-                    <Alert className="bg-green-50 dark:bg-green-900/30 border-green-500">
-                      <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      <AlertTitle className="text-green-800 dark:text-green-300">Airdrop Already Claimed!</AlertTitle>
-                      <AlertDescription className="text-green-700 dark:text-green-400">
-                        <div className="space-y-2">
-                          <p>You have successfully claimed your EcoCoin airdrop.</p>
-                          <p className="text-sm">
-                            Check your wallet for your ECO tokens. If you don't see them, you may need to add the token
-                            to your wallet.
-                          </p>
-                          <div className="mt-3 p-3 bg-green-100 dark:bg-green-800/50 rounded-lg">
-                            <p className="text-green-800 dark:text-green-300 font-medium text-sm">
-                              🎉 Thank you for being part of the EcoCoin community!
-                            </p>
-                          </div>
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  ) : claimSuccess ? (
-                    <Alert className="bg-green-50 dark:bg-green-900/30 border-green-500">
-                      <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      <AlertTitle className="text-green-800 dark:text-green-300">Success!</AlertTitle>
-                      <AlertDescription className="text-green-700 dark:text-green-400">
-                        {claimResult?.message || "Your EcoCoin tokens have been sent to your wallet."}
-                      </AlertDescription>
-                      {claimResult?.tokens && (
-                        <div className="mt-2 p-3 bg-green-100 dark:bg-green-800/50 rounded-lg">
-                          <p className="text-green-800 dark:text-green-300 font-medium">
-                            You received {claimResult.tokens} ECO tokens!
-                          </p>
-                          {claimResult.tx && (
-                            <p className="text-green-700 dark:text-green-400 text-xs mt-1 break-all">
-                              Transaction: {claimResult.tx}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </Alert>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <h4 className="font-medium mb-2 flex items-center text-blue-800 dark:text-blue-300">
-                          <AlertCircle className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
-                          Payment Required
-                        </h4>
-                        <p className="text-sm mb-3 text-blue-700 dark:text-blue-400">
-                          To claim your airdrop, you need to have earned at least {REQUIRED_POINTS} points by completing
-                          tasks and pay a fee of {FEE_AMOUNT} SOL to the airdrop wallet.
-                        </p>
-
-                        {/* Payment Options */}
-                        <div className="space-y-3">
-                          {/* Solana Pay Option */}
-                          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-blue-200 dark:border-blue-700">
-                            <h5 className="font-medium text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
-                              <Wallet className="w-4 h-4" />
-                              Easy Payment (Recommended)
-                            </h5>
-                            <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">
-                              Click below to open a payment request in your Phantom wallet
-                            </p>
+                      {userReferralCode && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Your Referral Code
+                          </label>
+                          <div className="flex items-center">
+                            <Input
+                              type="text"
+                              value={userReferralCode}
+                              readOnly
+                              className="flex-grow font-mono text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
+                            />
                             <Button
-                              onClick={handleSolanaPayment}
-                              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                              size="sm"
+                              onClick={() =>
+                                copyToClipboard(userReferralCode).then(() => toast.success("Referral code copied!"))
+                              }
+                              variant="outline"
+                              size="icon"
+                              className="ml-2 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
                             >
-                              <ExternalLink className="w-4 h-4 mr-2" />
-                              Pay {FEE_AMOUNT} SOL
+                              <Copy className="h-4 w-4" />
                             </Button>
                           </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Friends can use this code instead of your wallet address
+                          </p>
+                        </div>
+                      )}
 
-                          {/* Manual Payment Option */}
-                          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
-                            <h5 className="font-medium text-gray-800 dark:text-gray-300 mb-2">Manual Payment</h5>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                              If automatic payment doesn't work, send {FEE_AMOUNT} SOL to:
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          You have referred {referralCount} friends
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Claim Airdrop Card */}
+                <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                  <CardHeader>
+                    <CardTitle className="text-gray-800 dark:text-gray-100">Claim Your Airdrop</CardTitle>
+                    <CardDescription className="text-gray-600 dark:text-gray-300">
+                      Claim your EcoCoin tokens after completing tasks
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {claimSuccess ? (
+                      <Alert className="bg-green-50 dark:bg-green-900/30 border-green-500">
+                        <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <AlertTitle className="text-green-800 dark:text-green-300">Success!</AlertTitle>
+                        <AlertDescription className="text-green-700 dark:text-green-400">
+                          {claimResult?.message || "Your EcoCoin tokens have been sent to your wallet."}
+                        </AlertDescription>
+                        {claimResult?.tokens && (
+                          <div className="mt-2 p-3 bg-green-100 dark:bg-green-800/50 rounded-lg">
+                            <p className="text-green-800 dark:text-green-300 font-medium">
+                              You received {claimResult.tokens} ECO tokens!
                             </p>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="text"
-                                value={AIRDROP_WALLET}
-                                readOnly
-                                className="flex-1 font-mono text-xs bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200"
-                              />
-                              <Button
-                                onClick={copyAirdropWallet}
-                                variant="outline"
-                                size="sm"
-                                className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            </div>
                           </div>
+                        )}
+                      </Alert>
+                    ) : (
+                      <div className="space-y-6">
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <h4 className="font-medium mb-2 flex items-center text-blue-800 dark:text-blue-300">
+                            <AlertCircle className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400" />
+                            Information
+                          </h4>
+                          <p className="text-sm mb-2 text-blue-700 dark:text-blue-400">
+                            Each claim costs {REQUIRED_POINTS} points and gives you {TOKENS_PER_CLAIM} ECO tokens. You
+                            can claim multiple times as long as you have enough points.
+                          </p>
+                          <p className="text-sm text-blue-700 dark:text-blue-400">
+                            Current balance: {userPoints} points = {possibleClaims} possible claim
+                            {possibleClaims !== 1 ? "s" : ""}
+                          </p>
                         </div>
 
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-3">
-                          Need help? Contact our support team at{" "}
-                          <a
-                            href={`mailto:${SUPPORT_EMAIL}`}
-                            className="text-blue-600 dark:text-blue-400 hover:underline"
-                          >
-                            {SUPPORT_EMAIL}
-                          </a>
-                        </p>
-                      </div>
+                        <Button
+                          onClick={claimAirdrop}
+                          disabled={possibleClaims === 0 || loading.claim}
+                          className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white py-3 px-4 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
+                        >
+                          {loading.claim ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Processing...
+                            </>
+                          ) : possibleClaims > 0 ? (
+                            `Claim ${TOKENS_PER_CLAIM} Tokens (${REQUIRED_POINTS} points)`
+                          ) : (
+                            "Not Enough Points"
+                          )}
+                        </Button>
 
-                      <Button
-                        onClick={claimAirdrop}
-                        disabled={userPoints < REQUIRED_POINTS || loading.claim}
-                        className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white py-3 px-4 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
-                      >
-                        {loading.claim ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          "Claim Airdrop"
+                        {error && (
+                          <Alert variant="destructive" className="bg-red-50 dark:bg-red-900/30 border-red-500">
+                            <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            <AlertTitle className="text-red-800 dark:text-red-300">Error</AlertTitle>
+                            <AlertDescription className="text-red-700 dark:text-red-400">{error}</AlertDescription>
+                          </Alert>
                         )}
-                      </Button>
-
-                      {error && (
-                        <Alert variant="destructive" className="bg-red-50 dark:bg-red-900/30 border-red-500">
-                          <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                          <AlertTitle className="text-red-800 dark:text-red-300">Error</AlertTitle>
-                          <AlertDescription className="text-red-700 dark:text-red-400">{error}</AlertDescription>
-                        </Alert>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
