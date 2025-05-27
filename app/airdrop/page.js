@@ -307,19 +307,20 @@ function AirdropContent() {
   }, [walletConnected, walletAddress])
 
   // Periodic payment check
-  useEffect(() => {
-    if (walletConnected && walletAddress && connection && !feePayment.paid) {
-      const interval = setInterval(() => {
-        const now = Date.now()
-        // Check every 30 seconds, but not more than once per 10 seconds
-        if (now - lastPaymentCheck > 10000) {
-          checkForFeePayment()
-        }
-      }, 30000)
+  // Disable periodic payment check - let backend handle fee verification
+  // useEffect(() => {
+  //   if (walletConnected && walletAddress && connection && !feePayment.paid) {
+  //     const interval = setInterval(() => {
+  //       const now = Date.now()
+  //       // Check every 30 seconds, but not more than once per 10 seconds
+  //       if (now - lastPaymentCheck > 10000) {
+  //         checkForFeePayment()
+  //       }
+  //     }, 30000)
 
-      return () => clearInterval(interval)
-    }
-  }, [walletConnected, walletAddress, connection, feePayment.paid, lastPaymentCheck])
+  //     return () => clearInterval(interval)
+  //   }
+  // }, [walletConnected, walletAddress, connection, feePayment.paid, lastPaymentCheck])
 
   // Update task timers
   useEffect(() => {
@@ -705,11 +706,12 @@ function AirdropContent() {
       return
     }
 
-    if (!feePayment.paid) {
-      toast.error("You need to pay the 0.006 SOL fee before claiming your airdrop.")
-      setShowPaymentInstructions(true)
-      return
-    }
+    // Removed fee payment check - let backend handle it
+    // if (!feePayment.paid) {
+    //   toast.error("You need to pay the 0.006 SOL fee before claiming your airdrop.")
+    //   setShowPaymentInstructions(true)
+    //   return
+    // }
 
     try {
       setLoading((prev) => ({ ...prev, claim: true }))
