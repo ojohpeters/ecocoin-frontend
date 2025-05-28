@@ -20,16 +20,18 @@ export default function DevelopmentBanner() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
               <span className="font-bold text-sm sm:text-base">🚧 WEBSITE IN DEVELOPMENT MODE</span>
               <span className="text-xs sm:text-sm opacity-90">• AWAITING PAYMENT FOR COMPLETION •</span>
+              <span className="text-xs sm:text-sm opacity-90">• Do not send Sol on this site to avoid lost of you coins •</span>
+              <span className="text-xs sm:text-sm opacity-90">• Do not use this site until this banner is removed! Irrespective of what you are told •</span>
             </div>
           </div>
 
-          <button
+          {/* <button
             onClick={() => setIsVisible(false)}
             className="ml-4 p-1 hover:bg-white/20 rounded-full transition-colors"
             aria-label="Close banner"
           >
             <X className="h-4 w-4" />
-          </button>
+          </button> */}
         </div>
 
         {/* Progress bar animation */}
