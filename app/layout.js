@@ -15,8 +15,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-
-
+        <div className="pt-16">
+          {" "}
+          {children}
+        </div>
         <Footer />
       </body>
     </html>
