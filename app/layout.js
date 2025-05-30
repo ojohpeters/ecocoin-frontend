@@ -15,12 +15,8 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* <DevelopmentBanner /> */}
-        <div className="pt-16">
-          {" "}
-          {/* Add padding to account for fixed banner */}
-          {children}
-        </div>
+
+
         <Footer />
       </body>
     </html>
