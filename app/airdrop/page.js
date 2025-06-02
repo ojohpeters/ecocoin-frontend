@@ -35,7 +35,7 @@ const TASK_COMPLETION_DELAY = 10000 // 10 seconds in milliseconds
 const SUPPORT_EMAIL = "Support@ecotp.org"
 
 // Social media links
-const YOUTUBE_LINK = "https://www.youtube.com/@NightStories2025"
+// const YOUTUBE_LINK = "https://www.youtube.com/@NightStories2025"
 const INSTAGRAM_LINK = "https://www.instagram.com/ecocoin.eco?igsh=MWhsOW1uc3BhYzFjMQ=="
 const TELEGRAM_LINK = "https://t.me/ecocoinglobal"
 const TWITTER_LINK = "https://x.com/Ecocoin_Eco"
